@@ -1,1 +1,18 @@
-[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/2xw7QaEj)
+# BalkanID Full Stack Engineering Intern — Capstone Hiring Task
+
+Secure, deduplicated file storage platform (Go backend + React frontend).
+
+## Stack
+- **Backend**: Go, GraphQL, PostgreSQL, Redis, MinIO
+- **Frontend**: Next.js + Tailwind (with shadcn/ui)
+- **Dev**: Docker Compose
+
+## Quickstart
+```bash
+docker compose up -d
+cd backend && air
+cd frontend && npm run dev
+```
+
+
+Author: Vishal R
