@@ -1,7 +1,7 @@
 version: '3.8'
 services:
   db:
-    image: postgres:15
+    image: postgres:16
     restart: always
     environment:
       POSTGRES_USER: postgres
@@ -11,6 +11,15 @@ services:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
+      - ./backend/migrations:/migrations
+
+  migrate:
+    image: migrate/migrate
+    command: ["-path", "/migrations", "-database", "postgres://postgres:postgres@db:5432/filevault?sslmode=disable", "up"]
+    volumes:
+      - ./backend/migrations:/migrations
+    depends_on:
+      - db
 
   minio:
     image: minio/minio
