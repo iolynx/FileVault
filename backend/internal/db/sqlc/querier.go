@@ -6,11 +6,26 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 type Querier interface {
+	CreateBlob(ctx context.Context, arg CreateBlobParams) (Blob, error)
+	CreateFile(ctx context.Context, arg CreateFileParams) (File, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DecrementBlobRefcount(ctx context.Context, id uuid.UUID) (int32, error)
+	DeleteBlob(ctx context.Context, id uuid.UUID) error
+	DeleteBlobIfUnused(ctx context.Context, id uuid.UUID) error
+	DeleteFile(ctx context.Context, id uuid.UUID) error
+	GetBlobByID(ctx context.Context, id uuid.UUID) (Blob, error)
+	GetBlobBySha(ctx context.Context, sha256 string) (Blob, error)
+	GetFileByUUID(ctx context.Context, id uuid.UUID) (File, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
+	IncrementBlobRefcount(ctx context.Context, id uuid.UUID) (int32, error)
+	ListFilesByOwner(ctx context.Context, ownerID int64) ([]File, error)
+	UpdateBlobRefcount(ctx context.Context, arg UpdateBlobRefcountParams) error
+	UserOwnsBlob(ctx context.Context, arg UserOwnsBlobParams) (int32, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -6,6 +6,7 @@
 /backend/bin
 /backend/dist
 /backend/vendor
+/backend/tmp
 
 
 # Frontend

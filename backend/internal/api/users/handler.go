@@ -87,7 +87,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	})
 
 	util.WriteJSON(w, http.StatusOK, map[string]string{
-		"message": "Login Succesfull",
+		"message": "Login Succesful",
 	})
 	w.Write([]byte("Logged in successfully."))
 }

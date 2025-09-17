@@ -1,40 +1,47 @@
 package main
 
 import (
-	"fmt"
-	"github.com/joho/godotenv"
 	"log"
 	"net/http"
 	"os"
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/files"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/users"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/config"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/storage"
 	_ "github.com/lib/pq"
 )
 
 func main() {
-	err := godotenv.Load("cmd/.env")
+
+	cfg, err := config.LoadConfig()
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		log.Fatal(err)
 	}
 
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		os.Getenv("DB_USER"),
-		os.Getenv("DB_PASSWORD"),
-		os.Getenv("DB_HOST"),
-		os.Getenv("DB_PORT"),
-		os.Getenv("DB_NAME"),
-	)
-
-	pool := db.Connect(dsn)
+	// Initialize DB
+	pool := db.Connect(cfg.Database.URL)
 	defer pool.Close()
 
+	// Initialize Minio, Storage Handler
+	store, err := storage.NewMinioStorage(cfg.Minio)
+	if err != nil {
+		log.Fatal("Failed to initialize storage", err)
+	}
+
+	// Initialize Users Repository, Service, Handler
 	userRepo := users.NewRepository(pool)
 	userService := users.NewService(userRepo, os.Getenv("JWT_SECRET"))
 	userHandler := users.NewHandler(userService)
 
-	server := api.NewServer(userHandler)
+	// Initialize Files Repository, Service, Handler
+	fileRepo := files.NewRepository(pool)
+	fileService := files.NewService(fileRepo, store)
+	fileHandler := files.NewFileHandler(fileService)
+
+	server := api.NewServer(userHandler, fileHandler)
 
 	log.Println("server listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", server.Router))

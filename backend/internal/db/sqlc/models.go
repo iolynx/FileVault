@@ -5,11 +5,35 @@
 package sqlc
 
 import (
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Blob struct {
+	ID          uuid.UUID          `json:"id"`
+	Sha256      string             `json:"sha256"`
+	StoragePath string             `json:"storage_path"`
+	Size        int64              `json:"size"`
+	MimeType    pgtype.Text        `json:"mime_type"`
+	Refcount    int32              `json:"refcount"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+type File struct {
+	ID            uuid.UUID          `json:"id"`
+	OwnerID       int64              `json:"owner_id"`
+	BlobID        uuid.UUID          `json:"blob_id"`
+	Filename      string             `json:"filename"`
+	DeclaredMime  pgtype.Text        `json:"declared_mime"`
+	Size          int64              `json:"size"`
+	UploadedAt    pgtype.Timestamptz `json:"uploaded_at"`
+	IsPublic      pgtype.Bool        `json:"is_public"`
+	PublicToken   pgtype.UUID        `json:"public_token"`
+	DownloadCount pgtype.Int8        `json:"download_count"`
+}
+
 type User struct {
-	ID        int32            `json:"id"`
+	ID        int64            `json:"id"`
 	Name      string           `json:"name"`
 	Email     string           `json:"email"`
 	Password  string           `json:"password"`

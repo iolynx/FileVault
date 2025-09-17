@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db/sqlc"
@@ -29,6 +30,11 @@ func (s *Service) Signup(ctx context.Context, email, name string, password strin
 		return sqlc.User{}, fmt.Errorf("Failed to hash password: %w", err)
 	}
 
+	_, err = s.repo.GetUserByEmail(ctx, email)
+	if err == nil {
+		return sqlc.User{}, fmt.Errorf("User already exists")
+	}
+
 	user, err := s.repo.CreateUser(ctx, email, name, string(passwordHash))
 	if err != nil {
 		return sqlc.User{}, fmt.Errorf("Failed to create user: %w", err)
@@ -36,7 +42,7 @@ func (s *Service) Signup(ctx context.Context, email, name string, password strin
 	return user, nil
 }
 
-func (s *Service) AuthenticateUser(ctx context.Context, email, password string) (int32, error) {
+func (s *Service) AuthenticateUser(ctx context.Context, email, password string) (int64, error) {
 	user, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
 		log.Println("Log In Failed: No Such User")
@@ -53,10 +59,10 @@ func (s *Service) AuthenticateUser(ctx context.Context, email, password string) 
 	return user.ID, nil
 }
 
-func (s *Service) GenerateToken(userID int32) (string, error) {
+func (s *Service) GenerateToken(userID int64) (string, error) {
 	claims := jwt.MapClaims{
-		"sub": userID,
-		"exp": time.Now().Add(24 * time.Hour).Unix(),
+		"user_id": strconv.FormatInt(userID, 10),
+		"exp":     time.Now().Add(24 * time.Hour).Unix(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
