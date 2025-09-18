@@ -165,11 +165,11 @@ export default function ActionsDropdown({ file, onFileChange }: ActionsDropDownP
 							<DownloadIcon />
 							Download
 						</DropdownMenuItem>
-						<DropdownMenuItem onSelect={() => setRenameDialogOpen(true)} disabled={file.userOwnsFile ? false : true}>
+						<DropdownMenuItem onSelect={() => setRenameDialogOpen(true)} disabled={file.user_owns_file ? false : true}>
 							<PencilIcon />
 							Rename
 						</DropdownMenuItem >
-						<DropdownMenuItem onSelect={() => setDeleteDialogOpen(true)} disabled={file.userOwnsFile ? false : true}>
+						<DropdownMenuItem onSelect={() => setDeleteDialogOpen(true)} disabled={file.user_owns_file ? false : true}>
 							<TrashIcon />
 							Delete
 						</DropdownMenuItem>
@@ -178,7 +178,7 @@ export default function ActionsDropdown({ file, onFileChange }: ActionsDropDownP
 					<DropdownMenuSeparator />
 
 					<DropdownMenuGroup>
-						<DropdownMenuItem onSelect={() => setShareDialogOpen(true)} disabled={file.userOwnsFile ? false : true}>
+						<DropdownMenuItem onSelect={() => setShareDialogOpen(true)} disabled={file.user_owns_file ? false : true}>
 							<UserRoundPlusIcon />
 							Share
 						</DropdownMenuItem>

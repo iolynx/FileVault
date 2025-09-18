@@ -31,7 +31,7 @@ export default function FilesTable({ files, onFileChange }: FilesTableProps) {
 					{files.map((file, index) => (
 						<TableRow key={index}>
 							<TableCell className="flex flex-row gap-x-2 px-4 pt-4">{getFileIcon(file.content_type)} {file.filename}</TableCell>
-							<TableCell>{file.userOwnsFile ? "Your Vault" : "Shared with You"}</TableCell>
+							<TableCell>{file.user_owns_file ? "Your Vault" : "Shared with You"}</TableCell>
 							<TableCell>{formatBytes(Number(file.size))}</TableCell>
 							<TableCell>{new Date(file.uploaded_at).toLocaleDateString()}</TableCell>
 							<TableCell>

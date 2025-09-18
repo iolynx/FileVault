@@ -4,5 +4,5 @@ export interface File {
 	size: bigint;
 	content_type: string;
 	uploaded_at: string;
-	userOwnsFile: boolean;
+	user_owns_file: boolean;
 }

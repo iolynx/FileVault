@@ -23,11 +23,12 @@ type Service struct {
 }
 
 type File struct {
-	ID          uuid.UUID `json:"id"`
-	Filename    string    `json:"filename"`
-	Size        int64     `json:"size"`
-	ContentType string    `json:"content_type"`
-	UploadedAt  time.Time `json:"uploaded_at"`
+	ID           uuid.UUID `json:"id"`
+	Filename     string    `json:"filename"`
+	Size         int64     `json:"size"`
+	ContentType  string    `json:"content_type"`
+	UploadedAt   time.Time `json:"uploaded_at"`
+	UserOwnsFile bool      `json:"user_owns_file"`
 }
 
 type User struct {
@@ -83,7 +84,7 @@ func (s *Service) UploadFile(ctx context.Context, ownerID int64, file multipart.
 }
 
 // ListFiles returns a list of Files (Special Object Type that does not contain all fields) owned by a particular User
-func (s *Service) ListFiles(ctx context.Context, ownerID int64, search string, limit, offset int32) ([]File, error) {
+func (s *Service) ListFilesByOwner(ctx context.Context, ownerID int64, search string, limit, offset int32) ([]File, error) {
 	fileRows, err := s.repo.ListFilesByOwner(ctx, ownerID, search, limit, offset)
 	if err != nil {
 		return []File{}, err
@@ -92,11 +93,12 @@ func (s *Service) ListFiles(ctx context.Context, ownerID int64, search string, l
 	files := make([]File, 0, len(fileRows))
 	for _, r := range fileRows {
 		files = append(files, File{
-			ID:          r.ID,
-			Filename:    r.Filename,
-			Size:        r.Size,
-			ContentType: r.ContentType.String,
-			UploadedAt:  r.UploadedAt.Time,
+			ID:           r.ID,
+			Filename:     r.Filename,
+			Size:         r.Size,
+			ContentType:  r.ContentType.String,
+			UploadedAt:   r.UploadedAt.Time,
+			UserOwnsFile: true,
 		})
 	}
 
@@ -212,8 +214,8 @@ func (s *Service) ShareFile(ctx context.Context, fileID uuid.UUID, ownerID, targ
 	return err
 }
 
-func (s *Service) ListFilesSharedWithUser(ctx context.Context, userID int64) ([]File, error) {
-	fileRows, err := s.repo.ListFilesSharedWithUser(ctx, userID)
+func (s *Service) ListFilesSharedWithUser(ctx context.Context, userID int64, search string, limit, offset int32) ([]File, error) {
+	fileRows, err := s.repo.ListFilesSharedWithUser(ctx, userID, search, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -221,11 +223,12 @@ func (s *Service) ListFilesSharedWithUser(ctx context.Context, userID int64) ([]
 	files := make([]File, 0, len(fileRows))
 	for _, r := range fileRows {
 		files = append(files, File{
-			ID:          r.ID,
-			Filename:    r.Filename,
-			Size:        r.Size,
-			ContentType: r.DeclaredMime.String,
-			UploadedAt:  r.UploadedAt.Time,
+			ID:           r.ID,
+			Filename:     r.Filename,
+			Size:         r.Size,
+			ContentType:  r.DeclaredMime.String,
+			UploadedAt:   r.UploadedAt.Time,
+			UserOwnsFile: false,
 		})
 	}
 
@@ -268,4 +271,25 @@ func (s *Service) ListUsersWithAccesToFile(ctx context.Context, fileID uuid.UUID
 	}
 
 	return usersWithAccess, nil
+}
+
+func (s *Service) ListFilesForUser(ctx context.Context, userID int64, search string, limit, offset int32) ([]File, error) {
+	fileRows, err := s.repo.ListFilesForUser(ctx, userID, search, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	files := make([]File, 0, len(fileRows))
+	for _, r := range fileRows {
+		files = append(files, File{
+			ID:           r.ID,
+			Filename:     r.Filename,
+			Size:         r.Size,
+			ContentType:  r.ContentType.String,
+			UploadedAt:   r.UploadedAt.Time,
+			UserOwnsFile: r.UserOwnsFile,
+		})
+	}
+
+	return files, nil
 }

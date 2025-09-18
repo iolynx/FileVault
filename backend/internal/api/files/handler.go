@@ -155,23 +155,13 @@ func (h *FileHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Obtaining Files for \nownerID: %d, search: %s, limitStr: %d, offsetStr: %d", ownerID, search, limit, offset)
 
-	files, err := h.service.ListFiles(context.Background(), ownerID, search, int32(limit), int32(offset))
-	if err != nil {
-		util.WriteError(w, http.StatusInternalServerError, "failed to fetch files")
-	}
-
-	sharedFiles, err := h.service.ListFilesSharedWithUser(r.Context(), ownerID)
+	files, err := h.service.ListFilesForUser(context.Background(), ownerID, search, int32(limit), int32(offset))
 	if err != nil {
 		util.WriteError(w, http.StatusInternalServerError, "failed to fetch shared files")
 	}
 
-	log.Print("Fetched files")
-	resp := ListFilesResponse{
-		Owned:  files,
-		Shared: sharedFiles,
-	}
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
+	if err := json.NewEncoder(w).Encode(files); err != nil {
 		util.WriteError(w, http.StatusInternalServerError, "failed to encode response")
 	}
 }
@@ -256,12 +246,6 @@ func (h *FileHandler) ShareFile(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.TargetUserID <= 0 {
 		util.WriteError(w, http.StatusBadRequest, "Invalid UserID")
-		return
-	}
-
-	// Convert targetUserID to an int64
-	if err != nil {
-		util.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	if int64(req.TargetUserID) == ownerID {

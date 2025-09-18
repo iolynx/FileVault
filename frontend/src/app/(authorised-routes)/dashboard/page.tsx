@@ -30,13 +30,8 @@ const DashboardPage = () => {
 			})
 
 			// TODO: remove for prod
-			console.log(res.data)
-			const combinedFiles = [
-				...res.data.owned.map((file: any) => ({ ...file, userOwnsFile: true })),
-				...res.data.shared.map((file: any) => ({ ...file, userOwnsFile: false }))
-			]
-
-			setFiles(combinedFiles);
+			console.log('RESULT IS: ', res.data)
+			setFiles(res.data);
 			console.log("Files:", files)
 		} catch (error: any) {
 			const err = error as APIError

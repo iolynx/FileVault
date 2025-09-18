@@ -372,15 +372,96 @@ func (q *Queries) ListFilesByOwner(ctx context.Context, arg ListFilesByOwnerPara
 	return items, nil
 }
 
+const listFilesForUser = `-- name: ListFilesForUser :many
+SELECT DISTINCT f.id,
+       f.owner_id,
+       f.filename,
+       f.size,
+       f.declared_mime AS content_type,
+       f.uploaded_at,
+       (f.owner_id = $1) AS user_owns_file
+FROM files f
+LEFT JOIN file_shares fs ON f.id = fs.file_id
+WHERE (f.owner_id = $1 OR fs.shared_with = $1)
+  AND ($2 = '' OR f.filename ILIKE '%' || $2 || '%')
+ORDER BY f.uploaded_at DESC
+LIMIT $3 OFFSET $4
+`
+
+type ListFilesForUserParams struct {
+	OwnerID int64       `json:"owner_id"`
+	Column2 interface{} `json:"column_2"`
+	Limit   int32       `json:"limit"`
+	Offset  int32       `json:"offset"`
+}
+
+type ListFilesForUserRow struct {
+	ID           uuid.UUID          `json:"id"`
+	OwnerID      int64              `json:"owner_id"`
+	Filename     string             `json:"filename"`
+	Size         int64              `json:"size"`
+	ContentType  pgtype.Text        `json:"content_type"`
+	UploadedAt   pgtype.Timestamptz `json:"uploaded_at"`
+	UserOwnsFile bool               `json:"user_owns_file"`
+}
+
+func (q *Queries) ListFilesForUser(ctx context.Context, arg ListFilesForUserParams) ([]ListFilesForUserRow, error) {
+	rows, err := q.db.Query(ctx, listFilesForUser,
+		arg.OwnerID,
+		arg.Column2,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFilesForUserRow{}
+	for rows.Next() {
+		var i ListFilesForUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OwnerID,
+			&i.Filename,
+			&i.Size,
+			&i.ContentType,
+			&i.UploadedAt,
+			&i.UserOwnsFile,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFilesSharedWithUser = `-- name: ListFilesSharedWithUser :many
 SELECT f.id, f.owner_id, f.blob_id, f.filename, f.declared_mime, f.size, f.uploaded_at, f.is_public, f.public_token, f.download_count
 FROM files f
-LEFT JOIN file_shares fs ON f.id = fs.file_id
+JOIN file_shares fs ON f.id = fs.file_id
 WHERE fs.shared_with = $1
+  AND ($2 = '' OR f.filename ILIKE '%' || $2 || '%')
+ORDER BY f.uploaded_at DESC
+LIMIT $3 OFFSET $4
 `
 
-func (q *Queries) ListFilesSharedWithUser(ctx context.Context, sharedWith int64) ([]File, error) {
-	rows, err := q.db.Query(ctx, listFilesSharedWithUser, sharedWith)
+type ListFilesSharedWithUserParams struct {
+	SharedWith int64       `json:"shared_with"`
+	Column2    interface{} `json:"column_2"`
+	Limit      int32       `json:"limit"`
+	Offset     int32       `json:"offset"`
+}
+
+func (q *Queries) ListFilesSharedWithUser(ctx context.Context, arg ListFilesSharedWithUserParams) ([]File, error) {
+	rows, err := q.db.Query(ctx, listFilesSharedWithUser,
+		arg.SharedWith,
+		arg.Column2,
+		arg.Limit,
+		arg.Offset,
+	)
 	if err != nil {
 		return nil, err
 	}

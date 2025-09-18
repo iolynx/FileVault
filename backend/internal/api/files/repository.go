@@ -75,8 +75,13 @@ func (r *Repository) CreateFileShare(ctx context.Context, fileID uuid.UUID, targ
 	})
 }
 
-func (r *Repository) ListFilesSharedWithUser(ctx context.Context, userID int64) ([]sqlc.File, error) {
-	return r.queries.ListFilesSharedWithUser(ctx, userID)
+func (r *Repository) ListFilesSharedWithUser(ctx context.Context, userID int64, search string, limit, offset int32) ([]sqlc.File, error) {
+	return r.queries.ListFilesSharedWithUser(ctx, sqlc.ListFilesSharedWithUserParams{
+		SharedWith: userID,
+		Column2:    search,
+		Limit:      limit,
+		Offset:     offset,
+	})
 }
 
 func (r *Repository) DoesUserExist(ctx context.Context, userID int64) (bool, error) {
@@ -99,5 +104,14 @@ func (r *Repository) UserHasAccess(ctx context.Context, sharedWith int64, fileID
 	return r.queries.UserHasAccess(ctx, sqlc.UserHasAccessParams{
 		SharedWith: sharedWith,
 		ID:         fileID,
+	})
+}
+
+func (r *Repository) ListFilesForUser(ctx context.Context, userID int64, search string, limit, offset int32) ([]sqlc.ListFilesForUserRow, error) {
+	return r.queries.ListFilesForUser(ctx, sqlc.ListFilesForUserParams{
+		OwnerID: userID,
+		Column2: search,
+		Limit:   limit,
+		Offset:  offset,
 	})
 }

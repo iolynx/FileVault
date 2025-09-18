@@ -77,10 +77,14 @@ SET filename = $1
 WHERE id = $2;
 
 -- name: ListFilesSharedWithUser :many
+-- name: ListFilesSharedWithUser :many
 SELECT f.*
 FROM files f
-LEFT JOIN file_shares fs ON f.id = fs.file_id
-WHERE fs.shared_with = $1;
+JOIN file_shares fs ON f.id = fs.file_id
+WHERE fs.shared_with = $1
+  AND ($2 = '' OR f.filename ILIKE '%' || $2 || '%')
+ORDER BY f.uploaded_at DESC
+LIMIT $3 OFFSET $4;
 
 -- name: UserHasAccess :one
 SELECT EXISTS (
@@ -106,3 +110,19 @@ RETURNING id, file_id, shared_with, permission, created_at;
 -- name: DeleteFileShare :exec
 DELETE FROM file_shares
 WHERE file_id = $1 AND shared_with = $2;
+
+
+-- name: ListFilesForUser :many
+SELECT DISTINCT f.id,
+       f.owner_id,
+       f.filename,
+       f.size,
+       f.declared_mime AS content_type,
+       f.uploaded_at,
+       (f.owner_id = $1) AS user_owns_file
+FROM files f
+LEFT JOIN file_shares fs ON f.id = fs.file_id
+WHERE (f.owner_id = $1 OR fs.shared_with = $1)
+  AND ($2 = '' OR f.filename ILIKE '%' || $2 || '%')
+ORDER BY f.uploaded_at DESC
+LIMIT $3 OFFSET $4;
