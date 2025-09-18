@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strconv"
 	"time"
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db/sqlc"
@@ -61,7 +60,7 @@ func (s *Service) AuthenticateUser(ctx context.Context, email, password string) 
 
 func (s *Service) GenerateToken(userID int64) (string, error) {
 	claims := jwt.MapClaims{
-		"user_id": strconv.FormatInt(userID, 10),
+		"user_id": userID,
 		"exp":     time.Now().Add(24 * time.Hour).Unix(),
 	}
 

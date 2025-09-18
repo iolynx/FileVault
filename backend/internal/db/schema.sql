@@ -30,6 +30,18 @@ CREATE TABLE files (
   download_count BIGINT DEFAULT 0
 );
 
+CREATE TABLE file_shares (
+    id BIGSERIAL PRIMARY KEY,
+    file_id UUID NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+    shared_with BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    permission TEXT NOT NULL DEFAULT 'read',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(file_id, shared_with)
+);
+
+
 CREATE INDEX idx_blobs_sha256 ON blobs(sha256);
 CREATE INDEX idx_files_owner ON files(owner_id);
+CREATE INDEX idx_files_owner_filename
+ON files(owner_id, filename);
 

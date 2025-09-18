@@ -1,0 +1,3 @@
+- TAGS (for files)
+- move cors to middleware
+- get secretkey from config

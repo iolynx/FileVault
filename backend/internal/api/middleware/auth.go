@@ -3,7 +3,6 @@ package middleware
 import (
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/userctx"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/util"
@@ -14,13 +13,13 @@ func AuthMiddleware(secret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Get Auth Header & Process
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				util.WriteError(w, http.StatusUnauthorized, "Missing Authorization Header")
+			cookie, err := r.Cookie("jwt")
+			if err != nil {
+				util.WriteError(w, http.StatusUnauthorized, "Missing JWT Cookie")
 				return
 			}
+			tokenString := cookie.Value
 
-			tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 					return nil, jwt.ErrInvalidKeyType
@@ -39,14 +38,15 @@ func AuthMiddleware(secret string) func(http.Handler) http.Handler {
 				return
 			}
 
-			userID, ok := claims["user_id"].(string)
+			userID, ok := claims["user_id"].(float64)
 			if !ok {
 				log.Print("invalid user_id claim")
 				util.WriteError(w, http.StatusUnauthorized, "invalid user_id claim")
 				return
 			}
 
-			ctx := userctx.SetUserID(r.Context(), userID)
+			// converting float64 to int64 to store in user context
+			ctx := userctx.SetUserID(r.Context(), int64(userID))
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

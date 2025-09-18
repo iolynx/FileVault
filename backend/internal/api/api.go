@@ -16,12 +16,12 @@ type Server struct {
 	Router *chi.Mux
 }
 
-func NewServer(userHandler *users.Handler, fileHander *files.FileHandler) *Server {
+func NewServer(userHandler *users.Handler, fileHandler *files.FileHandler) *Server {
 	r := chi.NewRouter()
 
 	corsOptions := cors.New(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:3000"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowedHeaders:   []string{"*"},
 		AllowCredentials: true,
 		MaxAge:           86400,
@@ -46,11 +46,19 @@ func NewServer(userHandler *users.Handler, fileHander *files.FileHandler) *Serve
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware(os.Getenv("JWT_SECRET")))
 
-		r.Get("/files/{id}", fileHander.DownloadFile)
-		r.Post("/files/upload", fileHander.Upload)
-		r.Get("/files/", fileHander.ListFiles)
-		r.Delete("/files/{id}", fileHander.DeleteFile)
-		r.Get("/files/url/{id}", fileHander.GetURL)
+		r.Post("/files/upload", fileHandler.Upload)
+		r.Post("/files/{id}/share", fileHandler.ShareFile)
+
+		r.Get("/files/{id}", fileHandler.DownloadFile)
+		r.Get("/files", fileHandler.ListFiles)
+		r.Get("/files/url/{id}", fileHandler.GetURL)
+		//r.Get("/files/{id}/shares", fileHandler.GetFileShares)
+
+		r.Patch("/files/{id}", fileHandler.UpdateFilename)
+
+		r.Delete("/files/{id}", fileHandler.DeleteFile)
+		//r.Delete("/files/{id}/share", fileHandler.UnshareFile)
+
 	})
 
 	return &Server{Router: r}

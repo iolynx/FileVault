@@ -67,7 +67,7 @@ const LoginPage = () => {
         <CardContent>
           <form className="space-y-4" onSubmit={handleSubmit(onLogIn)}>
             <div className="space-y-2">
-              <Label htmlFor="employeeId">Email Id</Label>
+              <Label htmlFor="email">Email Id</Label>
               <Input
                 type="email"
                 id="email"
@@ -76,7 +76,7 @@ const LoginPage = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="employeeId">Password</Label>
+              <Label htmlFor="password">Password</Label>
               <Input
                 type="password"
                 id="password"

@@ -2,19 +2,18 @@ package userctx
 
 import (
 	"context"
-	"strconv"
 )
 
 type ctxKey string
 
 const userIDKey ctxKey = "userID"
 
-// SetUserID stores the userID (as string) in the request context.
-func SetUserID(ctx context.Context, id string) context.Context {
+// SetUserID stores the userID (as int64) in the request context.
+func SetUserID(ctx context.Context, id int64) context.Context {
 	return context.WithValue(ctx, userIDKey, id)
 }
 
-// GetUserID extracts the userID from context and converts it to int64.
+// GetUserID extracts the userID from context
 // Returns (0, false) if missing or invalid.
 func GetUserID(ctx context.Context) (int64, bool) {
 	val := ctx.Value(userIDKey)
@@ -22,13 +21,8 @@ func GetUserID(ctx context.Context) (int64, bool) {
 		return 0, false
 	}
 
-	idStr, ok := val.(string)
+	idInt, ok := val.(int64)
 	if !ok {
-		return 0, false
-	}
-
-	idInt, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
 		return 0, false
 	}
 

@@ -13,18 +13,26 @@ import (
 type Querier interface {
 	CreateBlob(ctx context.Context, arg CreateBlobParams) (Blob, error)
 	CreateFile(ctx context.Context, arg CreateFileParams) (File, error)
+	CreateFileShare(ctx context.Context, arg CreateFileShareParams) (FileShare, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DecrementBlobRefcount(ctx context.Context, id uuid.UUID) (int32, error)
 	DeleteBlob(ctx context.Context, id uuid.UUID) error
 	DeleteBlobIfUnused(ctx context.Context, id uuid.UUID) error
 	DeleteFile(ctx context.Context, id uuid.UUID) error
+	DeleteFileShare(ctx context.Context, arg DeleteFileShareParams) error
 	GetBlobByID(ctx context.Context, id uuid.UUID) (Blob, error)
 	GetBlobBySha(ctx context.Context, sha256 string) (Blob, error)
 	GetFileByUUID(ctx context.Context, id uuid.UUID) (File, error)
+	GetFilesForUser(ctx context.Context, arg GetFilesForUserParams) ([]GetFilesForUserRow, error)
+	GetFilesForUserCount(ctx context.Context, arg GetFilesForUserCountParams) (int64, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	IncrementBlobRefcount(ctx context.Context, id uuid.UUID) (int32, error)
-	ListFilesByOwner(ctx context.Context, ownerID int64) ([]File, error)
+	ListFilesByOwner(ctx context.Context, arg ListFilesByOwnerParams) ([]ListFilesByOwnerRow, error)
+	ListFilesSharedWithUser(ctx context.Context, ownerID int64) ([]File, error)
+	ListPeopleWithAccessToFile(ctx context.Context, fileID uuid.UUID) ([]ListPeopleWithAccessToFileRow, error)
 	UpdateBlobRefcount(ctx context.Context, arg UpdateBlobRefcountParams) error
+	UpdateFilename(ctx context.Context, arg UpdateFilenameParams) error
+	UserHasAccess(ctx context.Context, arg UserHasAccessParams) (int32, error)
 	UserOwnsBlob(ctx context.Context, arg UserOwnsBlobParams) (int32, error)
 }
 

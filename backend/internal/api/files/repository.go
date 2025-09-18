@@ -59,6 +59,18 @@ func (r *Repository) CreateFile(ctx context.Context, ownerID int64, blobID uuid.
 	})
 }
 
-func (r *Repository) ListFilesByOwner(ctx context.Context, ownerID int64) ([]sqlc.File, error) {
-	return r.queries.ListFilesByOwner(ctx, ownerID)
+func (r *Repository) ListFilesByOwner(ctx context.Context, ownerID int64, search string, limit, offset int32) ([]sqlc.ListFilesByOwnerRow, error) {
+	return r.queries.ListFilesByOwner(ctx, sqlc.ListFilesByOwnerParams{
+		OwnerID: ownerID,
+		Column2: search,
+		Limit:   limit,
+		Offset:  offset,
+	})
+}
+
+func (r *Repository) CreateFileShare(ctx context.Context, fileID uuid.UUID, targetUserID int64) (sqlc.FileShare, error) {
+	return r.queries.CreateFileShare(ctx, sqlc.CreateFileShareParams{
+		FileID:     fileID,
+		SharedWith: targetUserID,
+	})
 }

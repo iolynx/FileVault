@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"mime/multipart"
+	"time"
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db/sqlc"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/storage"
@@ -19,6 +20,14 @@ import (
 type Service struct {
 	repo    *Repository
 	storage storage.Storage
+}
+
+type File struct {
+	ID          uuid.UUID `json:"id"`
+	Filename    string    `json:"filename"`
+	Size        int64     `json:"size"`
+	ContentType string    `json:"content_type"`
+	UploadedAt  time.Time `json:"uploaded_at"`
 }
 
 func NewService(repo *Repository, storage storage.Storage) *Service {
@@ -66,8 +75,25 @@ func (s *Service) UploadFile(ctx context.Context, ownerID int64, file multipart.
 	return s.repo.CreateFile(ctx, ownerID, newBlob.ID, header.Filename, header.Header.Get("Content-Type"), int64(len(buf)))
 }
 
-func (s *Service) ListFiles(ctx context.Context, ownerID int64) ([]sqlc.File, error) {
-	return s.repo.ListFilesByOwner(ctx, ownerID)
+// ListFiles returns a list of Files (Special Object Type that does not contain all fields) owned by a particular User
+func (s *Service) ListFiles(ctx context.Context, ownerID int64, search string, limit, offset int32) ([]File, error) {
+	fileRows, err := s.repo.ListFilesByOwner(ctx, ownerID, search, limit, offset)
+	if err != nil {
+		return []File{}, err
+	}
+
+	files := make([]File, 0, len(fileRows))
+	for _, r := range fileRows {
+		files = append(files, File{
+			ID:          r.ID,
+			Filename:    r.Filename,
+			Size:        r.Size,
+			ContentType: r.ContentType.String,
+			UploadedAt:  r.UploadedAt.Time,
+		})
+	}
+
+	return files, nil
 }
 
 func (s *Service) GetFileURL(ctx context.Context, fileID uuid.UUID, userID int64) (string, error) {
@@ -142,4 +168,34 @@ func (s *Service) GetBlobReader(ctx context.Context, file sqlc.File) (io.ReadClo
 
 	// we dont need to check if the object exists here as the storage layer already does that for us
 	return obj, nil
+}
+
+func (s *Service) UpdateFilename(ctx context.Context, newFilename string, fileID uuid.UUID, ownerID int64) error {
+	file, err := s.repo.GetFileByUUID(ctx, fileID)
+	if err != nil {
+		return err
+	}
+
+	if file.OwnerID != ownerID {
+		return errors.New("Error: Unauthorized")
+	}
+
+	return s.repo.queries.UpdateFilename(ctx, sqlc.UpdateFilenameParams{
+		Filename: newFilename,
+		ID:       fileID,
+	})
+}
+
+func (s *Service) ShareFile(ctx context.Context, fileID uuid.UUID, ownerID, targetUserID int64) error {
+	file, err := s.repo.GetFileByUUID(ctx, fileID)
+	if err != nil {
+		return err
+	}
+
+	if file.OwnerID != ownerID {
+		return errors.New("Not Authorized")
+	}
+
+	_, err = s.repo.CreateFileShare(ctx, fileID, targetUserID)
+	return err
 }

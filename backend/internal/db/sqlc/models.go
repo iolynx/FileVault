@@ -32,6 +32,14 @@ type File struct {
 	DownloadCount pgtype.Int8        `json:"download_count"`
 }
 
+type FileShare struct {
+	ID         int64              `json:"id"`
+	FileID     uuid.UUID          `json:"file_id"`
+	SharedWith int64              `json:"shared_with"`
+	Permission string             `json:"permission"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
 type User struct {
 	ID        int64            `json:"id"`
 	Name      string           `json:"name"`

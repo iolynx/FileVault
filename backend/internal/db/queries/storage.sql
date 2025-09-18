@@ -40,10 +40,11 @@ VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: ListFilesByOwner :many
-SELECT *
+SELECT id, filename, size, declared_mime as content_type, uploaded_at
 FROM files
-WHERE owner_id = $1
-ORDER BY uploaded_at DESC;
+WHERE owner_id = $1 AND ($2 = '' OR filename ILIKE '%' || $2 || '%')
+ORDER BY uploaded_at DESC
+LIMIT $3 OFFSET $4;
 
 -- name: GetFileByUUID :one
 SELECT *
@@ -53,3 +54,52 @@ WHERE f.id = $1;
 -- name: DeleteFile :exec
 DELETE FROM files
 WHERE id = $1;
+
+-- name: GetFilesForUser :many
+SELECT id, filename, size, declared_mime as mime_type, uploaded_at, is_public
+FROM files
+WHERE owner_id = $1
+AND (sqlc.narg('search')::TEXT IS NULL OR filename ILIKE '%' || sqlc.narg('search')::TEXT || '%')
+ORDER BY uploaded_at DESC
+LIMIT $2
+OFFSET $3;
+
+-- name: GetFilesForUserCount :one
+SELECT count(*)
+FROM files
+WHERE owner_id = $1
+AND (sqlc.narg('search')::TEXT IS NULL OR filename ILIKE '%' || sqlc.narg('search')::TEXT || '%');
+
+
+-- name: UpdateFilename :exec
+UPDATE files
+SET filename = $1
+WHERE id = $2;
+
+-- name: ListFilesSharedWithUser :many
+SELECT f.*
+FROM files f
+LEFT JOIN file_shares fs ON f.id = fs.file_id
+WHERE f.owner_id = $1 OR fs.shared_with = $1;
+
+-- name: UserHasAccess :one
+SELECT 1
+FROM files f
+LEFT JOIN file_shares fs
+  ON f.id = fs.file_id AND fs.shared_with = $1
+WHERE f.id = $2 AND (f.owner_id = $1 OR fs.shared_with = $1);
+
+-- name: ListPeopleWithAccessToFile :many
+SELECT u.id, u.email, fs.permission
+FROM file_shares fs
+JOIN users u ON u.id = fs.shared_with
+WHERE fs.file_id = $1;
+
+-- name: CreateFileShare :one
+INSERT INTO file_shares (file_id, shared_with)
+VALUES ($1, $2)
+RETURNING id, file_id, shared_with, permission, created_at;
+
+-- name: DeleteFileShare :exec
+DELETE FROM file_shares
+WHERE file_id = $1 AND shared_with = $2;
