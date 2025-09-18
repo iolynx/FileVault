@@ -67,3 +67,26 @@ func (s *Service) GenerateToken(userID int64) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(s.jwtSecret)
 }
+
+type User struct {
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+func (s *Service) ListOtherUsers(ctx context.Context, userID int64) ([]User, error) {
+	otherUsersRow, err := s.repo.ListOtherUsers(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	otherUsers := make([]User, 0, len(otherUsersRow))
+	for _, r := range otherUsersRow {
+		otherUsers = append(otherUsers, User{
+			ID:    r.ID,
+			Name:  r.Name,
+			Email: r.Email,
+		})
+	}
+	return otherUsers, nil
+}

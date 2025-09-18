@@ -376,11 +376,11 @@ const listFilesSharedWithUser = `-- name: ListFilesSharedWithUser :many
 SELECT f.id, f.owner_id, f.blob_id, f.filename, f.declared_mime, f.size, f.uploaded_at, f.is_public, f.public_token, f.download_count
 FROM files f
 LEFT JOIN file_shares fs ON f.id = fs.file_id
-WHERE f.owner_id = $1 OR fs.shared_with = $1
+WHERE fs.shared_with = $1
 `
 
-func (q *Queries) ListFilesSharedWithUser(ctx context.Context, ownerID int64) ([]File, error) {
-	rows, err := q.db.Query(ctx, listFilesSharedWithUser, ownerID)
+func (q *Queries) ListFilesSharedWithUser(ctx context.Context, sharedWith int64) ([]File, error) {
+	rows, err := q.db.Query(ctx, listFilesSharedWithUser, sharedWith)
 	if err != nil {
 		return nil, err
 	}
@@ -410,29 +410,35 @@ func (q *Queries) ListFilesSharedWithUser(ctx context.Context, ownerID int64) ([
 	return items, nil
 }
 
-const listPeopleWithAccessToFile = `-- name: ListPeopleWithAccessToFile :many
-SELECT u.id, u.email, fs.permission
+const listUsersWithAccessToFile = `-- name: ListUsersWithAccessToFile :many
+SELECT u.id, u.name, u.email, fs.permission
 FROM file_shares fs
 JOIN users u ON u.id = fs.shared_with
 WHERE fs.file_id = $1
 `
 
-type ListPeopleWithAccessToFileRow struct {
+type ListUsersWithAccessToFileRow struct {
 	ID         int64  `json:"id"`
+	Name       string `json:"name"`
 	Email      string `json:"email"`
 	Permission string `json:"permission"`
 }
 
-func (q *Queries) ListPeopleWithAccessToFile(ctx context.Context, fileID uuid.UUID) ([]ListPeopleWithAccessToFileRow, error) {
-	rows, err := q.db.Query(ctx, listPeopleWithAccessToFile, fileID)
+func (q *Queries) ListUsersWithAccessToFile(ctx context.Context, fileID uuid.UUID) ([]ListUsersWithAccessToFileRow, error) {
+	rows, err := q.db.Query(ctx, listUsersWithAccessToFile, fileID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListPeopleWithAccessToFileRow{}
+	items := []ListUsersWithAccessToFileRow{}
 	for rows.Next() {
-		var i ListPeopleWithAccessToFileRow
-		if err := rows.Scan(&i.ID, &i.Email, &i.Permission); err != nil {
+		var i ListUsersWithAccessToFileRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Email,
+			&i.Permission,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -474,11 +480,14 @@ func (q *Queries) UpdateFilename(ctx context.Context, arg UpdateFilenameParams) 
 }
 
 const userHasAccess = `-- name: UserHasAccess :one
-SELECT 1
-FROM files f
-LEFT JOIN file_shares fs
-  ON f.id = fs.file_id AND fs.shared_with = $1
-WHERE f.id = $2 AND (f.owner_id = $1 OR fs.shared_with = $1)
+SELECT EXISTS (
+  SELECT 1
+  FROM files f
+  LEFT JOIN file_shares fs
+    ON f.id = fs.file_id AND fs.shared_with = $1
+  WHERE f.id = $2
+    AND (f.owner_id = $1 OR fs.shared_with = $1)
+)
 `
 
 type UserHasAccessParams struct {
@@ -486,11 +495,11 @@ type UserHasAccessParams struct {
 	ID         uuid.UUID `json:"id"`
 }
 
-func (q *Queries) UserHasAccess(ctx context.Context, arg UserHasAccessParams) (int32, error) {
+func (q *Queries) UserHasAccess(ctx context.Context, arg UserHasAccessParams) (bool, error) {
 	row := q.db.QueryRow(ctx, userHasAccess, arg.SharedWith, arg.ID)
-	var column_1 int32
-	err := row.Scan(&column_1)
-	return column_1, err
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const userOwnsBlob = `-- name: UserOwnsBlob :one

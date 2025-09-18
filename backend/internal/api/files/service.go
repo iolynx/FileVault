@@ -30,6 +30,13 @@ type File struct {
 	UploadedAt  time.Time `json:"uploaded_at"`
 }
 
+type User struct {
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	Email      string `json:"email"`
+	Permission string `json:"permission"`
+}
+
 func NewService(repo *Repository, storage storage.Storage) *Service {
 	return &Service{repo: repo, storage: storage}
 }
@@ -123,7 +130,7 @@ func (s *Service) DeleteFile(ctx context.Context, fileID uuid.UUID, userID int64
 
 	// ownership check
 	if file.OwnerID != userID {
-		return errors.New("cannot delete file owned by another user")
+		return errors.New("Cannot delete file owned by another user")
 	}
 
 	// delete the file record
@@ -177,7 +184,7 @@ func (s *Service) UpdateFilename(ctx context.Context, newFilename string, fileID
 	}
 
 	if file.OwnerID != ownerID {
-		return errors.New("Error: Unauthorized")
+		return errors.New("Unauthorized")
 	}
 
 	return s.repo.queries.UpdateFilename(ctx, sqlc.UpdateFilenameParams{
@@ -196,6 +203,69 @@ func (s *Service) ShareFile(ctx context.Context, fileID uuid.UUID, ownerID, targ
 		return errors.New("Not Authorized")
 	}
 
+	userExists, _ := s.repo.DoesUserExist(ctx, targetUserID)
+	if !userExists {
+		return errors.New("User does not exist")
+	}
+
 	_, err = s.repo.CreateFileShare(ctx, fileID, targetUserID)
 	return err
+}
+
+func (s *Service) ListFilesSharedWithUser(ctx context.Context, userID int64) ([]File, error) {
+	fileRows, err := s.repo.ListFilesSharedWithUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	files := make([]File, 0, len(fileRows))
+	for _, r := range fileRows {
+		files = append(files, File{
+			ID:          r.ID,
+			Filename:    r.Filename,
+			Size:        r.Size,
+			ContentType: r.DeclaredMime.String,
+			UploadedAt:  r.UploadedAt.Time,
+		})
+	}
+
+	return files, nil
+}
+
+func (s *Service) RemoveFileShare(ctx context.Context, fileID uuid.UUID, ownerID, sharedWith int64) error {
+	file, err := s.repo.GetFileByUUID(ctx, fileID)
+	if err != nil {
+		return err
+	}
+
+	if file.OwnerID != ownerID {
+		return errors.New("not authorized to unshare this file")
+	}
+
+	return s.repo.DeleteFileShare(ctx, fileID, sharedWith)
+}
+
+func (s *Service) ListUsersWithAccesToFile(ctx context.Context, fileID uuid.UUID, ownerID int64) ([]User, error) {
+	file, _ := s.repo.GetFileByUUID(ctx, fileID)
+
+	if file.OwnerID != ownerID {
+		return nil, errors.New("Unauthorized")
+	}
+
+	userRows, err := s.repo.ListUsersWithAccessToFile(ctx, fileID)
+	if err != nil {
+		return nil, err
+	}
+
+	usersWithAccess := make([]User, 0, len(userRows))
+	for _, r := range userRows {
+		usersWithAccess = append(usersWithAccess, User{
+			ID:         r.ID,
+			Name:       r.Name,
+			Email:      r.Email,
+			Permission: r.Permission,
+		})
+	}
+
+	return usersWithAccess, nil
 }

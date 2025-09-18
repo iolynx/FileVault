@@ -13,6 +13,8 @@ import {
 import { FileUpIcon, FolderUpIcon, PlusIcon, Upload } from 'lucide-react';
 import api from '@/lib/axios';
 import { toast } from 'sonner';
+import { Progress } from '@/components/ui/progress';
+import { Input } from './ui/input';
 
 interface FileUploadMenuProps {
 	fetchFiles: () => void;
@@ -21,6 +23,7 @@ export function FileUploadMenu({ fetchFiles }: FileUploadMenuProps) {
 	const inputRef = useRef<HTMLInputElement>(null);
 
 	const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+	const toastIdRef = useRef<string | number>(null);
 
 	const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
 		const files = event.target.files;
@@ -39,6 +42,12 @@ export function FileUploadMenu({ fetchFiles }: FileUploadMenuProps) {
 		setUploadProgress(0); // Start progress tracking
 
 		try {
+			toastIdRef.current = toast.custom((t) => (
+				<div className="bg-white border-2 rounded-lg shadow-lg p-4 w-64">
+					<span>Uploading...</span>
+					<Progress value={0} className="w-full mt-2" />
+				</div>
+			));
 			const response = await api.post('/files/upload', formData, {
 				headers: {
 					'Content-Type': 'multipart/form-data',
@@ -50,6 +59,14 @@ export function FileUploadMenu({ fetchFiles }: FileUploadMenuProps) {
 							(progressEvent.loaded * 100) / progressEvent.total
 						);
 						setUploadProgress(percentCompleted);
+						if (toastIdRef.current) {
+							toast.custom((t) => (
+								<div className="bg-black border-2 rounded-lg p-4 w-64">
+									<span>Uploading... {percentCompleted}%</span>
+									<Progress value={percentCompleted} className="w-full mt-2" />
+								</div>
+							), { id: toastIdRef.current });
+						}
 					}
 				},
 			});
@@ -60,12 +77,18 @@ export function FileUploadMenu({ fetchFiles }: FileUploadMenuProps) {
 			toast.error("Upload Failed!");
 		} finally {
 			fetchFiles();
-			setTimeout(() => setUploadProgress(null), 2000);
+			if (toastIdRef.current) {
+				toast.dismiss(toastIdRef.current);
+				toast.success('Files uploaded successfully!');
+			}
+			setUploadProgress(null);
+			toastIdRef.current = null;
+			//setTimeout(() => setUploadProgress(null), 2000);
 		}
 	};
 
 	return (
-		<div>
+		<div className="justify-items-center justify-center">
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
 					<Button variant="outline"><PlusIcon /> New</Button>
@@ -85,23 +108,13 @@ export function FileUploadMenu({ fetchFiles }: FileUploadMenuProps) {
 				</DropdownMenuContent>
 			</DropdownMenu>
 
-			<input
+			<Input
 				type="file"
 				multiple
 				ref={inputRef}
 				onChange={handleFileChange}
 				style={{ display: 'none' }}
 			/>
-
-			{uploadProgress !== null && (
-				<div className="mt-4 w-full bg-gray-200 rounded-full h-2.5">
-					<div
-						className="bg-blue-600 h-2.5 rounded-full"
-						style={{ width: `${uploadProgress}%` }}
-					></div>
-					<p className="text-sm text-center mt-1">{uploadProgress}%</p>
-				</div>
-			)}
 		</div>
 	);
 }

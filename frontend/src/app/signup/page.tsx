@@ -100,7 +100,7 @@ const SignUpPage = () => {
             </div>
             <CardFooter className="flex-col justify-between p-0 pt-4">
               <Button type="submit">
-                {isLoading ? <Loader /> : "Sign In"}
+                {isLoading ? <Loader /> : "Sign Up"}
               </Button>
               <div className="mt-6 text-center text-sm">
                 Already have an account?{" "}

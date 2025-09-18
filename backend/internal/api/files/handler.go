@@ -96,28 +96,31 @@ func (h *FileHandler) GetURL(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *FileHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
-	fileID := chi.URLParam(r, "id")
+	fileID := uuid.MustParse(chi.URLParam(r, "id"))
 
-	// ownerIDStr = r.Context().Value(middleware.UserIDKey).(string)
 	ownerID, ok := userctx.GetUserID(r.Context())
 	if !ok {
-		util.WriteError(w, http.StatusUnauthorized, "missing user id")
+		util.WriteError(w, http.StatusUnauthorized, "Missing UserID")
 		return
 	}
 
-	file, err := h.service.repo.GetFileByUUID(context.Background(), uuid.MustParse(fileID))
+	file, err := h.service.repo.GetFileByUUID(context.Background(), fileID)
 	if err != nil {
 		util.WriteError(w, http.StatusInternalServerError, "File not found")
 	}
 
-	// TODO: move auth checks to service layer
-	if file.OwnerID != ownerID {
+	log.Printf("received request from user %d to download file %s", ownerID, fileID)
+
+	// Check if the user owns the file / is shared the file
+	userHasAccess, err := h.service.repo.UserHasAccess(r.Context(), ownerID, fileID)
+	if !userHasAccess || err != nil {
+		log.Printf("no access")
 		util.WriteError(w, http.StatusForbidden, "Not Allowed")
+		return
 	}
 
 	blobReader, err := h.service.GetBlobReader(r.Context(), file)
 	if err != nil {
-		log.Print("Error while reading file: ", err)
 		util.WriteError(w, http.StatusInternalServerError, "Cannot read file")
 		return
 	}
@@ -128,8 +131,18 @@ func (h *FileHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	io.Copy(w, blobReader)
 }
 
+type ListFilesResponse struct {
+	Owned  []File `json:"owned"`
+	Shared []File `json:"shared"`
+}
+
 func (h *FileHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
-	ownerID, _ := userctx.GetUserID(r.Context())
+	ownerID, ok := userctx.GetUserID(r.Context())
+	if !ok {
+		util.WriteError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
 	search := r.URL.Query().Get("search")
 	limitStr := r.URL.Query().Get("limit")
 	offsetStr := r.URL.Query().Get("offset")
@@ -146,13 +159,29 @@ func (h *FileHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		util.WriteError(w, http.StatusInternalServerError, "failed to fetch files")
 	}
-	log.Print("Fetched files")
 
-	json.NewEncoder(w).Encode(files)
+	sharedFiles, err := h.service.ListFilesSharedWithUser(r.Context(), ownerID)
+	if err != nil {
+		util.WriteError(w, http.StatusInternalServerError, "failed to fetch shared files")
+	}
+
+	log.Print("Fetched files")
+	resp := ListFilesResponse{
+		Owned:  files,
+		Shared: sharedFiles,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		util.WriteError(w, http.StatusInternalServerError, "failed to encode response")
+	}
 }
 
 func (h *FileHandler) DeleteFile(w http.ResponseWriter, r *http.Request) {
-	ownerID, _ := userctx.GetUserID(r.Context())
+	ownerID, ok := userctx.GetUserID(r.Context())
+	if !ok {
+		util.WriteError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
 
 	fileID := chi.URLParam(r, "id")
 	if fileID == "" {
@@ -163,7 +192,7 @@ func (h *FileHandler) DeleteFile(w http.ResponseWriter, r *http.Request) {
 	err := h.service.DeleteFile(context.Background(), uuid.MustParse(fileID), int64(ownerID))
 	if err != nil {
 		log.Print("error deleting file:", err)
-		util.WriteError(w, http.StatusInternalServerError, "error deleting file")
+		util.WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to delete file: %s", err))
 		return
 	}
 	util.WriteJSON(w, http.StatusOK, map[string]string{"message": "File Deleted"})
@@ -174,7 +203,11 @@ type UpdateFilenameRequest struct {
 }
 
 func (h *FileHandler) UpdateFilename(w http.ResponseWriter, r *http.Request) {
-	ownerID, _ := userctx.GetUserID(r.Context())
+	ownerID, ok := userctx.GetUserID(r.Context())
+	if !ok {
+		util.WriteError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
 
 	id := chi.URLParam(r, "id")
 	var req UpdateFilenameRequest
@@ -196,46 +229,93 @@ func (h *FileHandler) UpdateFilename(w http.ResponseWriter, r *http.Request) {
 	err = h.service.UpdateFilename(context.Background(), req.Filename, fileID, ownerID)
 	if err != nil {
 		log.Print("Error while renaming file: ", err)
-		util.WriteError(w, http.StatusInternalServerError, "Error renaming file")
+		util.WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Error renaming file: %s", err))
 		return
 	}
 	util.WriteJSON(w, http.StatusOK, map[string]string{"message": "File Renamed"})
 }
 
 type ShareFileRequest struct {
-	TargetUserID string `json:"target_user_id"`
+	TargetUserID int64 `json:"target_user_id"`
 }
 
 func (h *FileHandler) ShareFile(w http.ResponseWriter, r *http.Request) {
-	ownerID, _ := userctx.GetUserID(r.Context())
+	ownerID, ok := userctx.GetUserID(r.Context())
+	if !ok {
+		util.WriteError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
 
 	fileID, _ := uuid.Parse(chi.URLParam(r, "id"))
-	var req ShareFileRequest
 
+	var req ShareFileRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		util.WriteError(w, http.StatusBadRequest, fmt.Sprintf("Invalid Request Body: %s", err))
 		return
 	}
-
-	if req.TargetUserID == "" {
-		http.Error(w, "UserID cannot be empty", http.StatusBadRequest)
+	if req.TargetUserID <= 0 {
+		util.WriteError(w, http.StatusBadRequest, "Invalid UserID")
 		return
 	}
-
-	log.Printf("Received request to share file %s to: %s", fileID, req.TargetUserID)
 
 	// Convert targetUserID to an int64
-	targetUserID, err := strconv.Atoi(req.TargetUserID)
 	if err != nil {
 		util.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if int64(req.TargetUserID) == ownerID {
+		util.WriteError(w, http.StatusBadRequest, "Target User ID cannot be Your ID")
+		return
+	}
 
-	if err := h.service.ShareFile(r.Context(), fileID, ownerID, int64(targetUserID)); err != nil {
+	log.Printf("Received request to share file %s to: %s", fileID, req.TargetUserID)
+	if err := h.service.ShareFile(r.Context(), fileID, ownerID, req.TargetUserID); err != nil {
 		util.WriteError(w, http.StatusForbidden, err.Error())
 		return
 	}
 
-	util.WriteJSON(w, http.StatusOK, map[string]string{"message": "Shared file"})
+	util.WriteJSON(w, http.StatusOK, map[string]string{"message": "Shared file successfully"})
+}
+
+func (h *FileHandler) GetFileShares(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userctx.GetUserID(r.Context())
+	if !ok {
+		util.WriteError(w, http.StatusUnauthorized, "Unauthorized")
+	}
+
+	fileID, _ := uuid.Parse(chi.URLParam(r, "id"))
+
+	users, err := h.service.ListUsersWithAccesToFile(r.Context(), fileID, userID)
+	if err != nil {
+		util.WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	util.WriteJSON(w, http.StatusOK, users)
+}
+
+func (h *FileHandler) UnshareFile(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	ownerID, ok := userctx.GetUserID(ctx)
+	if !ok {
+		util.WriteError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	fileID, _ := uuid.Parse(chi.URLParam(r, "id"))
+	targetUserID, err := strconv.Atoi(chi.URLParam(r, "userid"))
+	if err != nil {
+		util.WriteError(w, http.StatusBadRequest, "Invalid UserID")
+		return
+	}
+
+	log.Printf("Received request to unshare file %s from: %d", fileID, targetUserID)
+
+	if err := h.service.RemoveFileShare(r.Context(), fileID, ownerID, int64(targetUserID)); err != nil {
+		util.WriteError(w, http.StatusForbidden, err.Error())
+		return
+	}
+
+	util.WriteJSON(w, http.StatusOK, map[string]string{"message": "Unshared file successfully"})
 }

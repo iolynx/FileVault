@@ -3,10 +3,13 @@ package users
 import (
 	"context"
 	"encoding/json"
-	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/util"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/userctx"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/util"
 )
 
 type Handler struct {
@@ -86,4 +89,21 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		"message": "Login Succesful",
 	})
 	w.Write([]byte("Logged in successfully."))
+}
+
+func (h *Handler) GetOtherUsers(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID, ok := userctx.GetUserID(ctx)
+	if !ok {
+		util.WriteError(w, http.StatusUnauthorized, "Missing User ID")
+		return
+	}
+
+	otherUsers, err := h.service.ListOtherUsers(ctx, userID)
+	if err != nil {
+		util.WriteError(w, http.StatusBadRequest, fmt.Sprintf("Error: %s", err))
+		return
+	}
+
+	util.WriteJSON(w, http.StatusOK, otherUsers)
 }

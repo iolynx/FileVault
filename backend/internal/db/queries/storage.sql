@@ -80,17 +80,20 @@ WHERE id = $2;
 SELECT f.*
 FROM files f
 LEFT JOIN file_shares fs ON f.id = fs.file_id
-WHERE f.owner_id = $1 OR fs.shared_with = $1;
+WHERE fs.shared_with = $1;
 
 -- name: UserHasAccess :one
-SELECT 1
-FROM files f
-LEFT JOIN file_shares fs
-  ON f.id = fs.file_id AND fs.shared_with = $1
-WHERE f.id = $2 AND (f.owner_id = $1 OR fs.shared_with = $1);
+SELECT EXISTS (
+  SELECT 1
+  FROM files f
+  LEFT JOIN file_shares fs
+    ON f.id = fs.file_id AND fs.shared_with = $1
+  WHERE f.id = $2
+    AND (f.owner_id = $1 OR fs.shared_with = $1)
+);
 
--- name: ListPeopleWithAccessToFile :many
-SELECT u.id, u.email, fs.permission
+-- name: ListUsersWithAccessToFile :many
+SELECT u.id, u.name, u.email, fs.permission
 FROM file_shares fs
 JOIN users u ON u.id = fs.shared_with
 WHERE fs.file_id = $1;

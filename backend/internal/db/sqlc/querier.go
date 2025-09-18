@@ -28,11 +28,13 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	IncrementBlobRefcount(ctx context.Context, id uuid.UUID) (int32, error)
 	ListFilesByOwner(ctx context.Context, arg ListFilesByOwnerParams) ([]ListFilesByOwnerRow, error)
-	ListFilesSharedWithUser(ctx context.Context, ownerID int64) ([]File, error)
-	ListPeopleWithAccessToFile(ctx context.Context, fileID uuid.UUID) ([]ListPeopleWithAccessToFileRow, error)
+	ListFilesSharedWithUser(ctx context.Context, sharedWith int64) ([]File, error)
+	ListOtherUsers(ctx context.Context, id int64) ([]ListOtherUsersRow, error)
+	ListUsersWithAccessToFile(ctx context.Context, fileID uuid.UUID) ([]ListUsersWithAccessToFileRow, error)
 	UpdateBlobRefcount(ctx context.Context, arg UpdateBlobRefcountParams) error
 	UpdateFilename(ctx context.Context, arg UpdateFilenameParams) error
-	UserHasAccess(ctx context.Context, arg UserHasAccessParams) (int32, error)
+	UserExists(ctx context.Context, id int64) (bool, error)
+	UserHasAccess(ctx context.Context, arg UserHasAccessParams) (bool, error)
 	UserOwnsBlob(ctx context.Context, arg UserOwnsBlobParams) (int32, error)
 }
 

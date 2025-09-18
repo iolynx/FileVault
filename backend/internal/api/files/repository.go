@@ -74,3 +74,30 @@ func (r *Repository) CreateFileShare(ctx context.Context, fileID uuid.UUID, targ
 		SharedWith: targetUserID,
 	})
 }
+
+func (r *Repository) ListFilesSharedWithUser(ctx context.Context, userID int64) ([]sqlc.File, error) {
+	return r.queries.ListFilesSharedWithUser(ctx, userID)
+}
+
+func (r *Repository) DoesUserExist(ctx context.Context, userID int64) (bool, error) {
+	return r.queries.UserExists(ctx, userID)
+}
+
+func (r *Repository) DeleteFileShare(ctx context.Context, fileID uuid.UUID, sharedWith int64) error {
+	return r.queries.DeleteFileShare(ctx, sqlc.DeleteFileShareParams{
+		FileID:     fileID,
+		SharedWith: sharedWith,
+	})
+}
+
+func (r *Repository) ListUsersWithAccessToFile(ctx context.Context, fileID uuid.UUID) ([]sqlc.ListUsersWithAccessToFileRow, error) {
+	return r.queries.ListUsersWithAccessToFile(ctx, fileID)
+}
+
+// this function takes the userID in its SharedWith Param, but also checks if the user owns the file
+func (r *Repository) UserHasAccess(ctx context.Context, sharedWith int64, fileID uuid.UUID) (bool, error) {
+	return r.queries.UserHasAccess(ctx, sqlc.UserHasAccessParams{
+		SharedWith: sharedWith,
+		ID:         fileID,
+	})
+}

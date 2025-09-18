@@ -1,3 +1,5 @@
+import { MultiSelectOption } from "@/components/multi-select";
+import { User } from "@/types/User";
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
@@ -16,3 +18,13 @@ export function formatBytes(bytes: number, decimals = 2): string {
 
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
+
+export const mapUsersToOptions = (users: User[]): MultiSelectOption[] => {
+  return users.map((u) => ({
+    label: `${u.name} (${u.email})`,
+    value: u.id,
+
+    icon: undefined,
+    disabled: false,
+  }));
+};

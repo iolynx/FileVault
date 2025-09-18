@@ -52,3 +52,49 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 	)
 	return i, err
 }
+
+const listOtherUsers = `-- name: ListOtherUsers :many
+SELECT id, email, name
+FROM users
+WHERE id <> $1
+ORDER BY name
+`
+
+type ListOtherUsersRow struct {
+	ID    int64  `json:"id"`
+	Email string `json:"email"`
+	Name  string `json:"name"`
+}
+
+func (q *Queries) ListOtherUsers(ctx context.Context, id int64) ([]ListOtherUsersRow, error) {
+	rows, err := q.db.Query(ctx, listOtherUsers, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOtherUsersRow{}
+	for rows.Next() {
+		var i ListOtherUsersRow
+		if err := rows.Scan(&i.ID, &i.Email, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const userExists = `-- name: UserExists :one
+SELECT EXISTS(
+    SELECT 1 FROM users WHERE id = $1
+)
+`
+
+func (q *Queries) UserExists(ctx context.Context, id int64) (bool, error) {
+	row := q.db.QueryRow(ctx, userExists, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}

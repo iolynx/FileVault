@@ -12,8 +12,13 @@ import { File } from "@/types/File";
 import { toast } from "sonner";
 import api from "@/lib/axios";
 import { DeleteDialogModal } from "./DeleteDialogModal";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { RenameDialogModal } from "./RenameDialogModal";
+import { Axios, AxiosError } from "axios";
+import { mapUsersToOptions } from "@/lib/utils";
+import { User } from "@/types/User";
+import { MultiSelectOption } from "./multi-select";
+import { ShareDialogModal } from "./ShareDialogModal";
 
 interface ActionsDropDownProps {
 	file: File;
@@ -23,35 +28,60 @@ interface ActionsDropDownProps {
 export default function ActionsDropdown({ file, onFileChange }: ActionsDropDownProps) {
 	const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false)
 	const [isRenameDialogOpen, setRenameDialogOpen] = useState(false)
+	const [isShareDialogOpen, setShareDialogOpen] = useState(false)
+	const [shareDialogOptions, setShareDialogOptions] = useState<MultiSelectOption[]>([]);
+	const [shareDialogDefautValue, setShareDialogDefaultValue] = useState<string[]>([]);
 
-	const handleDelete = async (fileID: string | null) => {
+	const fetchUsers = async () => {
 		try {
-			if (fileID === null) {
-				throw new Error("null File ID");
-			}
-			const res = await api.delete(`/files/${fileID}`, { withCredentials: true });
+			const res = await api.get("/users",
+				{ withCredentials: true },
+			)
+			const users: User[] = await res.data
+			setShareDialogOptions(mapUsersToOptions(users));
+		} catch (error) {
+			console.log("error while fetching users:", error)
+		}
+	}
+
+	const fetchUsersWithAccessToFile = async () => {
+		try {
+			const res = await api.get(`/files/${file.id}/shares`,
+				{ withCredentials: true },
+			)
+			console.log(res.data);
+			const usersWithAccessToFile: User[] = await res.data
+			const userIds = usersWithAccessToFile.map((user) => user.id);
+			setShareDialogDefaultValue(userIds);
+		} catch (error) {
+			console.log("error while fetching users with access to file: ", error)
+		}
+	}
+	useEffect(() => {
+		fetchUsers()
+		fetchUsersWithAccessToFile()
+	}, [isShareDialogOpen])
+
+	const handleDelete = async () => {
+		try {
+			const res = await api.delete(`/files/${file.id}`, { withCredentials: true });
 			if (res.status === 200) {
 				toast.success(res.data.message);
 				onFileChange();
 			} else {
 				toast.error(res.data.error);
 			}
-		} catch (error) {
+		} catch (error: any) {
 			console.log('Error while deleting file: ', error);
-			toast.error('Failed to delete file.');
+			toast.error(error.response.data.message);
 		} finally {
 			onFileChange();
 		}
 	}
 
-	// TODO: REMOVE THE USELESS PARAMS
-	const handleDownload = async (fileID: string, filename: string) => {
+	const handleDownload = async () => {
 		try {
-			if (fileID === "") {
-				throw new Error("FileID is empty");
-			}
-
-			const res = await api.get(`/files/${fileID}`, {
+			const res = await api.get(`/files/${file.id}`, {
 				withCredentials: true,
 				responseType: 'blob',
 			});
@@ -59,40 +89,69 @@ export default function ActionsDropdown({ file, onFileChange }: ActionsDropDownP
 
 			const link = document.createElement('a');
 			link.href = url;
-			link.setAttribute('download', filename);
+			link.setAttribute('download', file.filename);
 			document.body.appendChild(link);
 			link.click();
 
 			link.parentNode?.removeChild(link);
 			window.URL.revokeObjectURL(url);
-			toast.success(res.data.message);
-		} catch (error) {
-			toast.error("Error while downloading");
+			console.log(res.data)
+			toast.success("File Downloaded");
+		} catch (error: any) {
+			toast.error(error.response.data.message);
 		}
 	}
 
 	const handleRename = async (newFilename: string) => {
 		try {
-			if (newFilename == "") {
-				throw new Error("New Filename cannot be Empty")
+			if (newFilename === "") {
+				toast.error("Filename cannot be empty")
+				return
 			}
 			const res = await api.patch(`/files/${file.id}`,
 				{ filename: newFilename },
 				{ headers: { "Content-Type": "application/json" }, withCredentials: true }
 			)
-			if (res.status == 200) {
-				console.log(res.data);
-				toast.success(res.data.message);
-			} else {
-				toast.error(res.data.error);
-			}
+			toast.success(res.data.message);
 		} catch (error: any) {
-			toast.error(error);
+			toast.error(error.response.data.message)
 		} finally {
 			onFileChange();
 		}
 	}
 
+	// sequential sharing for now, TODO: creat an endpoint that can accept users in bulk
+	const handleShare = async (selectedUsers: string[]) => {
+		// find the users that were added
+		const added = selectedUsers.filter(id => !shareDialogDefautValue.includes(id));
+
+		// find the users that were removed
+		const removed = shareDialogDefautValue.filter(id => !selectedUsers.includes(id));
+		try {
+			for (const addedUser of added) {
+				const res = await api.post(
+					`/files/${file.id}/share`,
+					{ target_user_id: addedUser },
+					{
+						headers: { "Content-Type": "application/json" },
+						withCredentials: true,
+					}
+				);
+				toast.success(res.data.message);
+			}
+
+			for (const removedUser of removed) {
+				const res = await api.delete(`/files/${file.id}/share/${removedUser}`, { withCredentials: true },
+				);
+				toast.success(res.data.message);
+			}
+		} catch (error: any) {
+			console.error(error);
+			toast.error(error.response?.data?.error || "Failed to share file");
+		} finally {
+			onFileChange();
+		}
+	};
 	return (
 		<div className="">
 			<DropdownMenu>
@@ -102,15 +161,15 @@ export default function ActionsDropdown({ file, onFileChange }: ActionsDropDownP
 				<DropdownMenuContent className="w-36" align="start">
 
 					<DropdownMenuGroup>
-						<DropdownMenuItem onSelect={() => handleDownload(file.id, file.filename)}>
+						<DropdownMenuItem onSelect={() => handleDownload()}>
 							<DownloadIcon />
 							Download
 						</DropdownMenuItem>
-						<DropdownMenuItem onSelect={() => setRenameDialogOpen(true)}>
+						<DropdownMenuItem onSelect={() => setRenameDialogOpen(true)} disabled={file.userOwnsFile ? false : true}>
 							<PencilIcon />
 							Rename
-						</DropdownMenuItem>
-						<DropdownMenuItem onSelect={() => setDeleteDialogOpen(true)}>
+						</DropdownMenuItem >
+						<DropdownMenuItem onSelect={() => setDeleteDialogOpen(true)} disabled={file.userOwnsFile ? false : true}>
 							<TrashIcon />
 							Delete
 						</DropdownMenuItem>
@@ -119,7 +178,7 @@ export default function ActionsDropdown({ file, onFileChange }: ActionsDropDownP
 					<DropdownMenuSeparator />
 
 					<DropdownMenuGroup>
-						<DropdownMenuItem>
+						<DropdownMenuItem onSelect={() => setShareDialogOpen(true)} disabled={file.userOwnsFile ? false : true}>
 							<UserRoundPlusIcon />
 							Share
 						</DropdownMenuItem>
@@ -143,7 +202,7 @@ export default function ActionsDropdown({ file, onFileChange }: ActionsDropDownP
 			<DeleteDialogModal
 				isOpen={isDeleteDialogOpen}
 				isOpenChange={setDeleteDialogOpen}
-				onConfirm={() => handleDelete(file.id)}
+				onConfirm={() => handleDelete()}
 			/>
 
 			<RenameDialogModal
@@ -152,6 +211,15 @@ export default function ActionsDropdown({ file, onFileChange }: ActionsDropDownP
 				originalFilename={file.filename}
 				onConfirm={(newFilename) => handleRename(newFilename)}
 			/>
+
+			<ShareDialogModal
+				isOpen={isShareDialogOpen}
+				isOpenChange={setShareDialogOpen}
+				userOptions={shareDialogOptions}
+				onConfirm={(usersToShare) => handleShare(usersToShare)}
+				defaultValue={shareDialogDefautValue}
+			/>
+
 		</div>
 	)
 }

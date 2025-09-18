@@ -33,3 +33,7 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*sqlc.Us
 	}
 	return &user, nil
 }
+
+func (r *Repository) ListOtherUsers(ctx context.Context, userID int64) ([]sqlc.ListOtherUsersRow, error) {
+	return r.queries.ListOtherUsers(ctx, userID)
+}

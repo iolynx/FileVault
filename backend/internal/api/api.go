@@ -47,17 +47,20 @@ func NewServer(userHandler *users.Handler, fileHandler *files.FileHandler) *Serv
 		r.Use(middleware.AuthMiddleware(os.Getenv("JWT_SECRET")))
 
 		r.Post("/files/upload", fileHandler.Upload)
-		r.Post("/files/{id}/share", fileHandler.ShareFile)
+
+		r.Get("/files", fileHandler.ListFiles)
+		//r.Get("/files/me", fileHandler.ListOwnFiles) // list of files owned by user
+		r.Get("/files/url/{id}", fileHandler.GetURL)
 
 		r.Get("/files/{id}", fileHandler.DownloadFile)
-		r.Get("/files", fileHandler.ListFiles)
-		r.Get("/files/url/{id}", fileHandler.GetURL)
-		//r.Get("/files/{id}/shares", fileHandler.GetFileShares)
-
 		r.Patch("/files/{id}", fileHandler.UpdateFilename)
-
 		r.Delete("/files/{id}", fileHandler.DeleteFile)
-		//r.Delete("/files/{id}/share", fileHandler.UnshareFile)
+
+		r.Post("/files/{id}/share", fileHandler.ShareFile)
+		r.Get("/files/{id}/shares", fileHandler.GetFileShares) //get list of users with access to file
+		r.Delete("/files/{id}/share/{userid}", fileHandler.UnshareFile)
+
+		r.Get("/users", userHandler.GetOtherUsers)
 
 	})
 

@@ -28,8 +28,15 @@ const DashboardPage = () => {
 				headers: { "Content-Type": "application/json" },
 				withCredentials: true,
 			})
+
+			// TODO: remove for prod
 			console.log(res.data)
-			setFiles(res.data)
+			const combinedFiles = [
+				...res.data.owned.map((file: any) => ({ ...file, userOwnsFile: true })),
+				...res.data.shared.map((file: any) => ({ ...file, userOwnsFile: false }))
+			]
+
+			setFiles(combinedFiles);
 			console.log("Files:", files)
 		} catch (error: any) {
 			const err = error as APIError
@@ -61,13 +68,12 @@ const DashboardPage = () => {
 							onChange={(e) => setSearch(e.target.value)}
 						/>
 					</div>
-
 				</div>
 			</div>
 			<div className="my-4">
 				<FileUploadMenu fetchFiles={fetchFiles} />
 			</div>
-			<Card className="rounded-2xl border shadow-sm overflow-hidden w-full max-w-7xl mt-4 pt-1">
+			<Card className="rounded-2xl border shadow-sm overflow-hidden w-full max-w-7xl mt-4 pt-1 pb-1">
 				<FilesTable files={files} onFileChange={() => fetchFiles()} />
 			</Card>
 		</div>

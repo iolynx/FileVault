@@ -77,7 +77,6 @@ func (m *MinioStorage) GetBlob(ctx context.Context, fileName string) (io.ReadClo
 		return nil, err
 	}
 
-	log.Print(obj)
 	if _, err := obj.Stat(); err != nil {
 		return nil, err
 	}
