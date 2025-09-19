@@ -37,3 +37,7 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*sqlc.Us
 func (r *Repository) ListOtherUsers(ctx context.Context, userID int64) ([]sqlc.ListOtherUsersRow, error) {
 	return r.queries.ListOtherUsers(ctx, userID)
 }
+
+func (r *Repository) GetUserByID(ctx context.Context, userID int64) (sqlc.User, error) {
+	return r.queries.GetUserByID(ctx, userID)
+}

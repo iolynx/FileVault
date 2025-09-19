@@ -1,3 +1,16 @@
 - TAGS (for files)
 - move cors to middleware
 - get secretkey from config
+
+
+(FEAT)
+- add filtering
+- add folders
+- implement logout
+- check imetype
+- implement url
+- download count
+- rate limits 
+- storage quotas
+- admin panel (show all files, all download counts)
+- password strength

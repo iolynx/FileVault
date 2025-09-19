@@ -4,7 +4,9 @@ CREATE TABLE users (
     email VARCHAR(255) UNIQUE NOT NULL,
     password TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'user',
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMP DEFAULT NOW(),
+    original_storage_bytes BIGINT NOT NULL DEFAULT 0,
+    dedup_storage_bytes BIGINT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE blobs (

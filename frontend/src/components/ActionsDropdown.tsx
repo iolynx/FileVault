@@ -131,7 +131,7 @@ export default function ActionsDropdown({ file, onFileChange }: ActionsDropDownP
 			for (const addedUser of added) {
 				const res = await api.post(
 					`/files/${file.id}/share`,
-					{ target_user_id: addedUser },
+					{ target_user_id: parseInt(addedUser) },
 					{
 						headers: { "Content-Type": "application/json" },
 						withCredentials: true,

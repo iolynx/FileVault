@@ -70,8 +70,8 @@ func (s *Service) GenerateToken(userID int64) (string, error) {
 
 type User struct {
 	ID    int64  `json:"id"`
-	Name  string `json:"name"`
 	Email string `json:"email"`
+	Name  string `json:"name"`
 }
 
 func (s *Service) ListOtherUsers(ctx context.Context, userID int64) ([]User, error) {
@@ -89,4 +89,30 @@ func (s *Service) ListOtherUsers(ctx context.Context, userID int64) ([]User, err
 		})
 	}
 	return otherUsers, nil
+}
+
+type Me struct {
+	ID                   int64  `json:"id"`
+	Email                string `json:"email"`
+	Name                 string `json:"name"`
+	Role                 string `json:"role"`
+	OriginalStorageBytes int64  `json:"original_storage_bytes"`
+	DedupStorageBytes    int64  `json:"dedup_storage_bytes"`
+}
+
+func (s *Service) GetUserByID(ctx context.Context, userID int64) (Me, error) {
+	user, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		return Me{}, err
+	}
+
+	return Me{
+		ID:                   user.ID,
+		Email:                user.Email,
+		Name:                 user.Name,
+		Role:                 user.Role,
+		OriginalStorageBytes: user.OriginalStorageBytes,
+		DedupStorageBytes:    user.DedupStorageBytes,
+	}, nil
+
 }

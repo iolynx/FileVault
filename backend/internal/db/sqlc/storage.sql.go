@@ -122,6 +122,24 @@ func (q *Queries) DecrementBlobRefcount(ctx context.Context, id uuid.UUID) (int3
 	return refcount, err
 }
 
+const decrementUserStorage = `-- name: DecrementUserStorage :exec
+UPDATE users
+SET original_storage_bytes = GREATEST(original_storage_bytes - $2, 0),
+    dedup_storage_bytes = GREATEST(dedup_storage_bytes - $3, 0)
+WHERE id = $1
+`
+
+type DecrementUserStorageParams struct {
+	ID                   int64 `json:"id"`
+	OriginalStorageBytes int64 `json:"original_storage_bytes"`
+	DedupStorageBytes    int64 `json:"dedup_storage_bytes"`
+}
+
+func (q *Queries) DecrementUserStorage(ctx context.Context, arg DecrementUserStorageParams) error {
+	_, err := q.db.Exec(ctx, decrementUserStorage, arg.ID, arg.OriginalStorageBytes, arg.DedupStorageBytes)
+	return err
+}
+
 const deleteBlob = `-- name: DeleteBlob :exec
 DELETE FROM blobs
 WHERE id = $1
@@ -316,6 +334,24 @@ func (q *Queries) IncrementBlobRefcount(ctx context.Context, id uuid.UUID) (int3
 	var refcount int32
 	err := row.Scan(&refcount)
 	return refcount, err
+}
+
+const incrementUserStorage = `-- name: IncrementUserStorage :exec
+UPDATE users
+SET original_storage_bytes = original_storage_bytes + $2,
+    dedup_storage_bytes = dedup_storage_bytes + $3
+WHERE id = $1
+`
+
+type IncrementUserStorageParams struct {
+	ID                   int64 `json:"id"`
+	OriginalStorageBytes int64 `json:"original_storage_bytes"`
+	DedupStorageBytes    int64 `json:"dedup_storage_bytes"`
+}
+
+func (q *Queries) IncrementUserStorage(ctx context.Context, arg IncrementUserStorageParams) error {
+	_, err := q.db.Exec(ctx, incrementUserStorage, arg.ID, arg.OriginalStorageBytes, arg.DedupStorageBytes)
+	return err
 }
 
 const listFilesByOwner = `-- name: ListFilesByOwner :many

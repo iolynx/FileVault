@@ -12,7 +12,7 @@ import (
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, name, password, created_at)
 VALUES ($1, $2, $3, NOW())
-RETURNING id, name, email, password, role, created_at
+RETURNING id, name, email, password, role, created_at, original_storage_bytes, dedup_storage_bytes
 `
 
 type CreateUserParams struct {
@@ -31,12 +31,14 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Password,
 		&i.Role,
 		&i.CreatedAt,
+		&i.OriginalStorageBytes,
+		&i.DedupStorageBytes,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, name, email, password, role, created_at FROM users WHERE email = $1
+SELECT id, name, email, password, role, created_at, original_storage_bytes, dedup_storage_bytes FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -49,6 +51,28 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Password,
 		&i.Role,
 		&i.CreatedAt,
+		&i.OriginalStorageBytes,
+		&i.DedupStorageBytes,
+	)
+	return i, err
+}
+
+const getUserByID = `-- name: GetUserByID :one
+SELECT id, name, email, password, role, created_at, original_storage_bytes, dedup_storage_bytes FROM users WHERE id = $1
+`
+
+func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByID, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.Password,
+		&i.Role,
+		&i.CreatedAt,
+		&i.OriginalStorageBytes,
+		&i.DedupStorageBytes,
 	)
 	return i, err
 }

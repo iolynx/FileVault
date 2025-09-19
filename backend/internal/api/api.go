@@ -38,6 +38,7 @@ func NewServer(userHandler *users.Handler, fileHandler *files.FileHandler) *Serv
 	r.Group(func(r chi.Router) {
 		r.Post("/auth/signup", userHandler.Signup)
 		r.Post("/auth/login", userHandler.Login)
+		r.Post("/auth/logout", userHandler.Logout)
 	})
 
 	// TODO: pass the secret using config
@@ -45,6 +46,8 @@ func NewServer(userHandler *users.Handler, fileHandler *files.FileHandler) *Serv
 	// Protected routes
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware(os.Getenv("JWT_SECRET")))
+
+		r.Get("/auth/me", userHandler.Me)
 
 		r.Post("/files/upload", fileHandler.Upload)
 

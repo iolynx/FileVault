@@ -12,6 +12,10 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { File } from "@/types/File"
 import { FileUploadMenu } from "@/components/FileUploadMenu";
+import { User } from "@/types/User";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Router } from "next/router";
+import { useRouter } from "next/navigation";
 
 const DashboardPage = () => {
 	const [loading, setLoading] = useState(true);
@@ -19,6 +23,7 @@ const DashboardPage = () => {
 	const [search, setSearch] = useState("");
 	const [filter, setFilter] = useState<Filter>();
 	const [page, setPage] = useState(0);
+	const router = useRouter()
 
 	const fetchFiles = async () => {
 		try {
@@ -30,16 +35,15 @@ const DashboardPage = () => {
 			})
 
 			// TODO: remove for prod
-			console.log('RESULT IS: ', res.data)
+			console.log('Files RESULT IS: ', res.data)
 			setFiles(res.data);
-			console.log("Files:", files)
+			router.refresh()
 		} catch (error: any) {
 			const err = error as APIError
-			toast.error("Error: " + err.response?.data.error || "Failed to fetch files")
+			toast.error("Error: Failed to fetch files")
 		} finally {
 			setLoading(false)
 		}
-		console.log("twas fetched")
 	};
 
 	useEffect(() => {
@@ -65,12 +69,17 @@ const DashboardPage = () => {
 					</div>
 				</div>
 			</div>
-			<div className="my-4">
+			<div className="m-4">
 				<FileUploadMenu fetchFiles={fetchFiles} />
 			</div>
-			<Card className="rounded-2xl border shadow-sm overflow-hidden w-full max-w-7xl mt-4 pt-1 pb-1">
-				<FilesTable files={files} onFileChange={() => fetchFiles()} />
-			</Card>
+
+			{loading ?
+				<Skeleton className="h-[500px] w-[86%] rounded-2xl max-w-7xl mt-4" /> :
+				<Card className="rounded-2xl border shadow-sm overflow-hidden w-full max-w-7xl mt-4 pt-1 pb-1">
+					<FilesTable files={files} onFileChange={() => fetchFiles()} />
+
+				</Card>
+			}
 		</div>
 
 	)

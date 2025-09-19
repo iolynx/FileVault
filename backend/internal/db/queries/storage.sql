@@ -126,3 +126,16 @@ WHERE (f.owner_id = $1 OR fs.shared_with = $1)
   AND ($2 = '' OR f.filename ILIKE '%' || $2 || '%')
 ORDER BY f.uploaded_at DESC
 LIMIT $3 OFFSET $4;
+
+
+-- name: IncrementUserStorage :exec
+UPDATE users
+SET original_storage_bytes = original_storage_bytes + $2,
+    dedup_storage_bytes = dedup_storage_bytes + $3
+WHERE id = $1;
+
+-- name: DecrementUserStorage :exec
+UPDATE users
+SET original_storage_bytes = GREATEST(original_storage_bytes - $2, 0),
+    dedup_storage_bytes = GREATEST(dedup_storage_bytes - $3, 0)
+WHERE id = $1;

@@ -59,6 +59,13 @@ func (s *Service) UploadFile(ctx context.Context, ownerID int64, file multipart.
 		if _, err := s.repo.IncrementBlobRefcount(ctx, blob.ID); err != nil {
 			return sqlc.File{}, err
 		}
+
+		// Update Storage Value for User
+		err = s.repo.IncrementUserStorage(ctx, ownerID, int(blob.Size), 0)
+		if err != nil {
+			return sqlc.File{}, err
+		}
+
 		// Create file record pointing to existing blob
 		return s.repo.CreateFile(ctx, ownerID, blob.ID, header.Filename, header.Header.Get("Content-Type"), blob.Size)
 	}
@@ -78,6 +85,9 @@ func (s *Service) UploadFile(ctx context.Context, ownerID int64, file multipart.
 		return sqlc.File{}, err
 	}
 	log.Print("Created Blob record in db")
+
+	// Update storage value for user
+	s.repo.IncrementUserStorage(ctx, ownerID, int(newBlob.Size), int(newBlob.Size))
 
 	// Create file record referencing blob
 	return s.repo.CreateFile(ctx, ownerID, newBlob.ID, header.Filename, header.Header.Get("Content-Type"), int64(len(buf)))
@@ -153,11 +163,22 @@ func (s *Service) DeleteFile(ctx context.Context, fileID uuid.UUID, userID int64
 		if err != nil {
 			return err
 		}
-
 		if err := s.storage.DeleteBlob(ctx, blob.StoragePath); err != nil {
 			return err
 		}
 		if err := s.repo.queries.DeleteBlobIfUnused(ctx, file.BlobID); err != nil {
+			return err
+		}
+
+		// Decrement storage value for user
+		err = s.repo.DecrementUserStorage(ctx, userID, int(blob.Size), int(blob.Size))
+		if err != nil {
+			return err
+		}
+	} else {
+		// Decrement storage value for user
+		err = s.repo.DecrementUserStorage(ctx, userID, int(file.Size), 0)
+		if err != nil {
 			return err
 		}
 	}

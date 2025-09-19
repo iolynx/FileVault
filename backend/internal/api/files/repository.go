@@ -115,3 +115,19 @@ func (r *Repository) ListFilesForUser(ctx context.Context, userID int64, search 
 		Offset:  offset,
 	})
 }
+
+func (r *Repository) IncrementUserStorage(ctx context.Context, userID int64, original_storage_increment, dedup_storage_increment int) error {
+	return r.queries.IncrementUserStorage(ctx, sqlc.IncrementUserStorageParams{
+		ID:                   userID,
+		OriginalStorageBytes: int64(original_storage_increment),
+		DedupStorageBytes:    int64(dedup_storage_increment),
+	})
+}
+
+func (r *Repository) DecrementUserStorage(ctx context.Context, userID int64, original_storage_decrement, dedup_storage_decrement int) error {
+	return r.queries.DecrementUserStorage(ctx, sqlc.DecrementUserStorageParams{
+		ID:                   userID,
+		OriginalStorageBytes: int64(original_storage_decrement),
+		DedupStorageBytes:    int64(dedup_storage_decrement),
+	})
+}

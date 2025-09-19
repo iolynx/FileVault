@@ -37,7 +37,7 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 	_, err := h.service.Signup(context.Background(), req.Email, req.Name, req.Password)
 	if err != nil {
 		log.Printf("Sign Up Error: %v", err)
-		util.WriteError(w, http.StatusInternalServerError, "could not create user")
+		util.WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Sign Up Error: %s", err))
 		return
 	}
 
@@ -56,10 +56,11 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("Received request to Login user")
 	userID, err := h.service.AuthenticateUser(context.Background(), req.Email, req.Password)
 	if err != nil {
 		http.SetCookie(w, &http.Cookie{
-			Name:     "token",
+			Name:     "jwt",
 			Value:    "",
 			Path:     "/",
 			Expires:  time.Unix(0, 0),
@@ -79,16 +80,28 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		Name:     "jwt",
 		Value:    token,
 		Path:     "/",
+		Domain:   "",
 		Expires:  time.Now().Add(24 * time.Hour),
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
+	})
+	util.WriteJSON(w, http.StatusOK, "Login successful")
+}
+
+func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Received request to Logout user")
+	http.SetCookie(w, &http.Cookie{
+		Name:     "jwt",
+		Value:    "",
+		Path:     "/",
+		Domain:   "",
+		Expires:  time.Unix(0, 0),
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	util.WriteJSON(w, http.StatusOK, map[string]string{
-		"message": "Login Succesful",
-	})
-	w.Write([]byte("Logged in successfully."))
 }
 
 func (h *Handler) GetOtherUsers(w http.ResponseWriter, r *http.Request) {
@@ -106,4 +119,21 @@ func (h *Handler) GetOtherUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	util.WriteJSON(w, http.StatusOK, otherUsers)
+}
+
+func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID, ok := userctx.GetUserID(ctx)
+	if !ok {
+		util.WriteError(w, http.StatusUnauthorized, "Missing User ID")
+		return
+	}
+
+	user, err := h.service.GetUserByID(ctx, userID)
+	if err != nil {
+		util.WriteError(w, http.StatusInternalServerError, "Error while fetching user info")
+		return
+	}
+
+	util.WriteJSON(w, http.StatusOK, user)
 }

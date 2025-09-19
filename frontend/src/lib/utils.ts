@@ -22,7 +22,7 @@ export function formatBytes(bytes: number, decimals = 2): string {
 export const mapUsersToOptions = (users: User[]): MultiSelectOption[] => {
   return users.map((u) => ({
     label: `${u.name} (${u.email})`,
-    value: u.id,
+    value: String(u.id),
 
     icon: undefined,
     disabled: false,

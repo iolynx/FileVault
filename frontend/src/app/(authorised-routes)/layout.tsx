@@ -8,8 +8,11 @@ import {
   navigationMenuTriggerStyle,
 } from "@/components/ui/navigation-menu";
 import { ReactNode } from "react";
+import { UserAccountPopover } from "@/components/UserAccountPopover";
+import { getCurrentUser } from "@/lib/auth";
 
-const AuthorizedLayout = ({ children }: { children: ReactNode }) => {
+const AuthorizedLayout = async ({ children }: { children: ReactNode }) => {
+  const user = await getCurrentUser()
   return (
     <div className="flex flex-col items-center h-screen w-full">
       <div className="flex flex-row w-full place-content-around">
@@ -36,6 +39,7 @@ const AuthorizedLayout = ({ children }: { children: ReactNode }) => {
           </NavigationMenu>
         </nav>
         <div>
+          <UserAccountPopover user={user} />
         </div>
       </div>
       <section className="w-full px-4">{children}</section>

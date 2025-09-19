@@ -16,6 +16,7 @@ type Querier interface {
 	CreateFileShare(ctx context.Context, arg CreateFileShareParams) (FileShare, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DecrementBlobRefcount(ctx context.Context, id uuid.UUID) (int32, error)
+	DecrementUserStorage(ctx context.Context, arg DecrementUserStorageParams) error
 	DeleteBlob(ctx context.Context, id uuid.UUID) error
 	DeleteBlobIfUnused(ctx context.Context, id uuid.UUID) error
 	DeleteFile(ctx context.Context, id uuid.UUID) error
@@ -26,7 +27,9 @@ type Querier interface {
 	GetFilesForUser(ctx context.Context, arg GetFilesForUserParams) ([]GetFilesForUserRow, error)
 	GetFilesForUserCount(ctx context.Context, arg GetFilesForUserCountParams) (int64, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
+	GetUserByID(ctx context.Context, id int64) (User, error)
 	IncrementBlobRefcount(ctx context.Context, id uuid.UUID) (int32, error)
+	IncrementUserStorage(ctx context.Context, arg IncrementUserStorageParams) error
 	ListFilesByOwner(ctx context.Context, arg ListFilesByOwnerParams) ([]ListFilesByOwnerRow, error)
 	ListFilesForUser(ctx context.Context, arg ListFilesForUserParams) ([]ListFilesForUserRow, error)
 	ListFilesSharedWithUser(ctx context.Context, arg ListFilesSharedWithUserParams) ([]File, error)
