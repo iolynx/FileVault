@@ -6,6 +6,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+
 import { DownloadIcon, EllipsisVerticalIcon, FolderIcon, InfoIcon, PencilIcon, TrashIcon, UserRoundPlusIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { File } from "@/types/File";
@@ -63,7 +64,6 @@ export default function ActionsDropdown({ file, onFileChange }: ActionsDropDownP
 			const res = await api.get(`/files/url/${file.id}`,
 				{ withCredentials: true },
 			)
-			console.log(res.data)
 			setShareDialogURL(res.data.url);
 		} catch (error) {
 			console.log("error while fetching link to file:", error)
@@ -110,7 +110,6 @@ export default function ActionsDropdown({ file, onFileChange }: ActionsDropDownP
 
 			link.parentNode?.removeChild(link);
 			window.URL.revokeObjectURL(url);
-			console.log(res.data)
 			toast.success("File Downloaded");
 		} catch (error: any) {
 			toast.error(error.response.data.message);

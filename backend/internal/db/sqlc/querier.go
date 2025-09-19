@@ -29,6 +29,7 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	IncrementBlobRefcount(ctx context.Context, id uuid.UUID) (int32, error)
+	IncrementFileDownloadCount(ctx context.Context, id uuid.UUID) error
 	IncrementUserStorage(ctx context.Context, arg IncrementUserStorageParams) error
 	ListFilesByOwner(ctx context.Context, arg ListFilesByOwnerParams) ([]ListFilesByOwnerRow, error)
 	ListFilesForUser(ctx context.Context, arg ListFilesForUserParams) ([]ListFilesForUserRow, error)

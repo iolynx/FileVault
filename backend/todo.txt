@@ -4,11 +4,9 @@
 
 
 (FEAT)
-- add filtering
 - add folders
-- check imetype
-- implement url
-- download count
+- check mimetype
+- download count (ui)
 - rate limits 
 - storage quotas
 - admin panel (show all files, all download counts)

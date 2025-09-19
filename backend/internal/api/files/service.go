@@ -14,6 +14,7 @@ import (
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db/sqlc"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/storage"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/util"
 	"github.com/google/uuid"
 )
 
@@ -23,12 +24,13 @@ type Service struct {
 }
 
 type File struct {
-	ID           uuid.UUID `json:"id"`
-	Filename     string    `json:"filename"`
-	Size         int64     `json:"size"`
-	ContentType  string    `json:"content_type"`
-	UploadedAt   time.Time `json:"uploaded_at"`
-	UserOwnsFile bool      `json:"user_owns_file"`
+	ID            uuid.UUID `json:"id"`
+	Filename      string    `json:"filename"`
+	Size          int64     `json:"size"`
+	ContentType   string    `json:"content_type"`
+	UploadedAt    time.Time `json:"uploaded_at"`
+	UserOwnsFile  bool      `json:"user_owns_file"`
+	DownloadCount *int64    `json:"download_count,omitempty"`
 }
 
 type User struct {
@@ -93,7 +95,7 @@ func (s *Service) UploadFile(ctx context.Context, ownerID int64, file multipart.
 	return s.repo.CreateFile(ctx, ownerID, newBlob.ID, header.Filename, header.Header.Get("Content-Type"), int64(len(buf)))
 }
 
-// ListFiles returns a list of Files (Special Object Type that does not contain all fields) owned by a particular User
+// ListFiles returns a list of files owned by a particular User
 func (s *Service) ListFilesByOwner(ctx context.Context, ownerID int64, search string, limit, offset int32) ([]File, error) {
 	fileRows, err := s.repo.ListFilesByOwner(ctx, ownerID, search, limit, offset)
 	if err != nil {
@@ -103,12 +105,13 @@ func (s *Service) ListFilesByOwner(ctx context.Context, ownerID int64, search st
 	files := make([]File, 0, len(fileRows))
 	for _, r := range fileRows {
 		files = append(files, File{
-			ID:           r.ID,
-			Filename:     r.Filename,
-			Size:         r.Size,
-			ContentType:  r.ContentType.String,
-			UploadedAt:   r.UploadedAt.Time,
-			UserOwnsFile: true,
+			ID:            r.ID,
+			Filename:      r.Filename,
+			Size:          r.Size,
+			ContentType:   r.ContentType.String,
+			UploadedAt:    r.UploadedAt.Time,
+			UserOwnsFile:  true,
+			DownloadCount: &r.DownloadCount.Int64,
 		})
 	}
 
@@ -293,23 +296,58 @@ func (s *Service) ListUsersWithAccesToFile(ctx context.Context, fileID uuid.UUID
 	return usersWithAccess, nil
 }
 
-func (s *Service) ListFilesForUser(ctx context.Context, userID int64, search string, limit, offset int32) ([]File, error) {
-	fileRows, err := s.repo.ListFilesForUser(ctx, userID, search, limit, offset)
+type FileSearchRequest struct {
+	Filename        string     `json:"filename"`
+	MimeType        string     `json:"mime_type"`
+	UploadedBefore  *time.Time `json:"uploaded_before"`
+	UploadedAfter   *time.Time `json:"uploaded_after"`
+	OwnershipStatus int32      `json:"ownership_status"`
+	Limit           int32      `json:"limit"`
+	Offset          int32      `json:"offset"`
+}
+
+func (s *Service) ListFilesForUser(ctx context.Context, userID int64, req FileSearchRequest) ([]File, error) {
+
+	fileRows, err := s.repo.ListFilesForUser(
+		ctx,
+		userID,
+		req.Filename,
+		req.OwnershipStatus,
+		req.MimeType,
+		util.TimeToTimestamptz(req.UploadedAfter),
+		util.TimeToTimestamptz(req.UploadedBefore),
+		req.Limit,
+		req.Offset,
+	)
+
 	if err != nil {
 		return nil, err
 	}
 
 	files := make([]File, 0, len(fileRows))
 	for _, r := range fileRows {
-		files = append(files, File{
+		dto := File{
 			ID:           r.ID,
 			Filename:     r.Filename,
 			Size:         r.Size,
 			ContentType:  r.ContentType.String,
 			UploadedAt:   r.UploadedAt.Time,
 			UserOwnsFile: r.UserOwnsFile,
-		})
+		}
+
+		// if user owns the file, return its download count
+		// else, download_count is nil and will be omitted
+		// from the response.
+		if dto.UserOwnsFile {
+			count := r.DownloadCount.Int64
+			dto.DownloadCount = &count
+		}
+		files = append(files, dto)
 	}
 
 	return files, nil
+}
+
+func (s *Service) IncrementDownloadCount(ctx context.Context, fileID uuid.UUID) error {
+	return s.repo.IncrementDownloadCount(ctx, fileID)
 }

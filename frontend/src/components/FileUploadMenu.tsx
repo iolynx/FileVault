@@ -83,7 +83,6 @@ export function FileUploadMenu({ fetchFiles }: FileUploadMenuProps) {
 			}
 			setUploadProgress(null);
 			toastIdRef.current = null;
-			//setTimeout(() => setUploadProgress(null), 2000);
 		}
 	};
 

@@ -40,7 +40,7 @@ VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: ListFilesByOwner :many
-SELECT id, filename, size, declared_mime as content_type, uploaded_at
+SELECT id, filename, size, declared_mime as content_type, uploaded_at, is_public, download_count
 FROM files
 WHERE owner_id = $1 AND ($2 = '' OR filename ILIKE '%' || $2 || '%')
 ORDER BY uploaded_at DESC
@@ -56,7 +56,7 @@ DELETE FROM files
 WHERE id = $1;
 
 -- name: GetFilesForUser :many
-SELECT id, filename, size, declared_mime as mime_type, uploaded_at, is_public
+SELECT id, filename, size, declared_mime as mime_type, uploaded_at, is_public, download_count
 FROM files
 WHERE owner_id = $1
 AND (sqlc.narg('search')::TEXT IS NULL OR filename ILIKE '%' || sqlc.narg('search')::TEXT || '%')
@@ -76,7 +76,6 @@ UPDATE files
 SET filename = $1
 WHERE id = $2;
 
--- name: ListFilesSharedWithUser :many
 -- name: ListFilesSharedWithUser :many
 SELECT f.*
 FROM files f
@@ -111,22 +110,30 @@ RETURNING id, file_id, shared_with, permission, created_at;
 DELETE FROM file_shares
 WHERE file_id = $1 AND shared_with = $2;
 
-
 -- name: ListFilesForUser :many
-SELECT DISTINCT f.id,
-       f.owner_id,
-       f.filename,
-       f.size,
-       f.declared_mime AS content_type,
-       f.uploaded_at,
-       (f.owner_id = $1) AS user_owns_file
+SELECT DISTINCT 
+    f.id,
+    f.filename,
+    f.size,
+    f.declared_mime AS content_type,
+    f.uploaded_at,
+    (f.owner_id = sqlc.arg(user_id)) AS user_owns_file,
+    f.download_count
 FROM files f
 LEFT JOIN file_shares fs ON f.id = fs.file_id
-WHERE (f.owner_id = $1 OR fs.shared_with = $1)
-  AND ($2 = '' OR f.filename ILIKE '%' || $2 || '%')
+WHERE 
+    (f.owner_id = sqlc.arg(user_id) OR fs.shared_with = sqlc.arg(user_id))
+    AND (sqlc.arg(filename)::TEXT = '' OR f.filename ILIKE '%' || sqlc.arg(filename)::TEXT || '%')
+    AND (sqlc.arg(mime_type)::TEXT = '' OR f.declared_mime = sqlc.arg(mime_type)::TEXT)
+    AND (sqlc.arg(uploaded_after)::TIMESTAMPTZ IS NULL OR f.uploaded_at > sqlc.arg(uploaded_after)::TIMESTAMPTZ)
+    AND (sqlc.arg(uploaded_before)::TIMESTAMPTZ IS NULL OR f.uploaded_at < sqlc.arg(uploaded_before)::TIMESTAMPTZ)
+    AND (
+        sqlc.arg(ownership_status)::int = 0
+        OR (sqlc.arg(ownership_status)::int = 1 AND f.owner_id = sqlc.arg(user_id))
+        OR (sqlc.arg(ownership_status)::int = 2 AND f.owner_id <> sqlc.arg(user_id))
+    )
 ORDER BY f.uploaded_at DESC
-LIMIT $3 OFFSET $4;
-
+LIMIT $1 OFFSET $2;
 
 -- name: IncrementUserStorage :exec
 UPDATE users
@@ -138,4 +145,9 @@ WHERE id = $1;
 UPDATE users
 SET original_storage_bytes = GREATEST(original_storage_bytes - $2, 0),
     dedup_storage_bytes = GREATEST(dedup_storage_bytes - $3, 0)
+WHERE id = $1;
+
+-- name: IncrementFileDownloadCount :exec
+UPDATE files
+SET download_count = download_count + 1
 WHERE id = $1;

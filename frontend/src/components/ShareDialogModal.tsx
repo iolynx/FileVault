@@ -3,12 +3,15 @@ import {
 	Dialog,
 	DialogClose,
 	DialogContent,
-	DialogDescription,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-	DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { Button } from "@/components/ui/button";
 import { MultiSelect, MultiSelectOption } from "./multi-select";
 import { toast } from "sonner";
@@ -59,9 +62,16 @@ export function ShareDialogModal({ isOpen, isOpenChange, userOptions, onConfirm,
 						</Button>
 					</DialogClose>
 					<div>
-						<Button variant="outline" onClick={handleCopy}>
-							Copy Link
-						</Button>
+						<Tooltip>
+							<TooltipTrigger>
+								<Button variant="outline" onClick={handleCopy}>
+									Copy Link
+								</Button>
+							</TooltipTrigger>
+							<TooltipContent>
+								Anyone with this link can view the file.
+							</TooltipContent>
+						</Tooltip>
 					</div>
 				</DialogFooter>
 			</DialogContent>

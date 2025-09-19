@@ -247,7 +247,7 @@ func (q *Queries) GetFileByUUID(ctx context.Context, id uuid.UUID) (File, error)
 }
 
 const getFilesForUser = `-- name: GetFilesForUser :many
-SELECT id, filename, size, declared_mime as mime_type, uploaded_at, is_public
+SELECT id, filename, size, declared_mime as mime_type, uploaded_at, is_public, download_count
 FROM files
 WHERE owner_id = $1
 AND ($4::TEXT IS NULL OR filename ILIKE '%' || $4::TEXT || '%')
@@ -264,12 +264,13 @@ type GetFilesForUserParams struct {
 }
 
 type GetFilesForUserRow struct {
-	ID         uuid.UUID          `json:"id"`
-	Filename   string             `json:"filename"`
-	Size       int64              `json:"size"`
-	MimeType   pgtype.Text        `json:"mime_type"`
-	UploadedAt pgtype.Timestamptz `json:"uploaded_at"`
-	IsPublic   pgtype.Bool        `json:"is_public"`
+	ID            uuid.UUID          `json:"id"`
+	Filename      string             `json:"filename"`
+	Size          int64              `json:"size"`
+	MimeType      pgtype.Text        `json:"mime_type"`
+	UploadedAt    pgtype.Timestamptz `json:"uploaded_at"`
+	IsPublic      pgtype.Bool        `json:"is_public"`
+	DownloadCount pgtype.Int8        `json:"download_count"`
 }
 
 func (q *Queries) GetFilesForUser(ctx context.Context, arg GetFilesForUserParams) ([]GetFilesForUserRow, error) {
@@ -293,6 +294,7 @@ func (q *Queries) GetFilesForUser(ctx context.Context, arg GetFilesForUserParams
 			&i.MimeType,
 			&i.UploadedAt,
 			&i.IsPublic,
+			&i.DownloadCount,
 		); err != nil {
 			return nil, err
 		}
@@ -336,6 +338,17 @@ func (q *Queries) IncrementBlobRefcount(ctx context.Context, id uuid.UUID) (int3
 	return refcount, err
 }
 
+const incrementFileDownloadCount = `-- name: IncrementFileDownloadCount :exec
+UPDATE files
+SET download_count = download_count + 1
+WHERE id = $1
+`
+
+func (q *Queries) IncrementFileDownloadCount(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, incrementFileDownloadCount, id)
+	return err
+}
+
 const incrementUserStorage = `-- name: IncrementUserStorage :exec
 UPDATE users
 SET original_storage_bytes = original_storage_bytes + $2,
@@ -355,7 +368,7 @@ func (q *Queries) IncrementUserStorage(ctx context.Context, arg IncrementUserSto
 }
 
 const listFilesByOwner = `-- name: ListFilesByOwner :many
-SELECT id, filename, size, declared_mime as content_type, uploaded_at
+SELECT id, filename, size, declared_mime as content_type, uploaded_at, is_public, download_count
 FROM files
 WHERE owner_id = $1 AND ($2 = '' OR filename ILIKE '%' || $2 || '%')
 ORDER BY uploaded_at DESC
@@ -370,11 +383,13 @@ type ListFilesByOwnerParams struct {
 }
 
 type ListFilesByOwnerRow struct {
-	ID          uuid.UUID          `json:"id"`
-	Filename    string             `json:"filename"`
-	Size        int64              `json:"size"`
-	ContentType pgtype.Text        `json:"content_type"`
-	UploadedAt  pgtype.Timestamptz `json:"uploaded_at"`
+	ID            uuid.UUID          `json:"id"`
+	Filename      string             `json:"filename"`
+	Size          int64              `json:"size"`
+	ContentType   pgtype.Text        `json:"content_type"`
+	UploadedAt    pgtype.Timestamptz `json:"uploaded_at"`
+	IsPublic      pgtype.Bool        `json:"is_public"`
+	DownloadCount pgtype.Int8        `json:"download_count"`
 }
 
 func (q *Queries) ListFilesByOwner(ctx context.Context, arg ListFilesByOwnerParams) ([]ListFilesByOwnerRow, error) {
@@ -397,6 +412,8 @@ func (q *Queries) ListFilesByOwner(ctx context.Context, arg ListFilesByOwnerPara
 			&i.Size,
 			&i.ContentType,
 			&i.UploadedAt,
+			&i.IsPublic,
+			&i.DownloadCount,
 		); err != nil {
 			return nil, err
 		}
@@ -409,44 +426,62 @@ func (q *Queries) ListFilesByOwner(ctx context.Context, arg ListFilesByOwnerPara
 }
 
 const listFilesForUser = `-- name: ListFilesForUser :many
-SELECT DISTINCT f.id,
-       f.owner_id,
-       f.filename,
-       f.size,
-       f.declared_mime AS content_type,
-       f.uploaded_at,
-       (f.owner_id = $1) AS user_owns_file
+SELECT DISTINCT 
+    f.id,
+    f.filename,
+    f.size,
+    f.declared_mime AS content_type,
+    f.uploaded_at,
+    (f.owner_id = $3) AS user_owns_file,
+    f.download_count
 FROM files f
 LEFT JOIN file_shares fs ON f.id = fs.file_id
-WHERE (f.owner_id = $1 OR fs.shared_with = $1)
-  AND ($2 = '' OR f.filename ILIKE '%' || $2 || '%')
+WHERE 
+    (f.owner_id = $3 OR fs.shared_with = $3)
+    AND ($4::TEXT = '' OR f.filename ILIKE '%' || $4::TEXT || '%')
+    AND ($5::TEXT = '' OR f.declared_mime = $5::TEXT)
+    AND ($6::TIMESTAMPTZ IS NULL OR f.uploaded_at > $6::TIMESTAMPTZ)
+    AND ($7::TIMESTAMPTZ IS NULL OR f.uploaded_at < $7::TIMESTAMPTZ)
+    AND (
+        $8::int = 0
+        OR ($8::int = 1 AND f.owner_id = $3)
+        OR ($8::int = 2 AND f.owner_id <> $3)
+    )
 ORDER BY f.uploaded_at DESC
-LIMIT $3 OFFSET $4
+LIMIT $1 OFFSET $2
 `
 
 type ListFilesForUserParams struct {
-	OwnerID int64       `json:"owner_id"`
-	Column2 interface{} `json:"column_2"`
-	Limit   int32       `json:"limit"`
-	Offset  int32       `json:"offset"`
+	Limit           int32              `json:"limit"`
+	Offset          int32              `json:"offset"`
+	UserID          int64              `json:"user_id"`
+	Filename        string             `json:"filename"`
+	MimeType        string             `json:"mime_type"`
+	UploadedAfter   pgtype.Timestamptz `json:"uploaded_after"`
+	UploadedBefore  pgtype.Timestamptz `json:"uploaded_before"`
+	OwnershipStatus int32              `json:"ownership_status"`
 }
 
 type ListFilesForUserRow struct {
-	ID           uuid.UUID          `json:"id"`
-	OwnerID      int64              `json:"owner_id"`
-	Filename     string             `json:"filename"`
-	Size         int64              `json:"size"`
-	ContentType  pgtype.Text        `json:"content_type"`
-	UploadedAt   pgtype.Timestamptz `json:"uploaded_at"`
-	UserOwnsFile bool               `json:"user_owns_file"`
+	ID            uuid.UUID          `json:"id"`
+	Filename      string             `json:"filename"`
+	Size          int64              `json:"size"`
+	ContentType   pgtype.Text        `json:"content_type"`
+	UploadedAt    pgtype.Timestamptz `json:"uploaded_at"`
+	UserOwnsFile  bool               `json:"user_owns_file"`
+	DownloadCount pgtype.Int8        `json:"download_count"`
 }
 
 func (q *Queries) ListFilesForUser(ctx context.Context, arg ListFilesForUserParams) ([]ListFilesForUserRow, error) {
 	rows, err := q.db.Query(ctx, listFilesForUser,
-		arg.OwnerID,
-		arg.Column2,
 		arg.Limit,
 		arg.Offset,
+		arg.UserID,
+		arg.Filename,
+		arg.MimeType,
+		arg.UploadedAfter,
+		arg.UploadedBefore,
+		arg.OwnershipStatus,
 	)
 	if err != nil {
 		return nil, err
@@ -457,12 +492,12 @@ func (q *Queries) ListFilesForUser(ctx context.Context, arg ListFilesForUserPara
 		var i ListFilesForUserRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.OwnerID,
 			&i.Filename,
 			&i.Size,
 			&i.ContentType,
 			&i.UploadedAt,
 			&i.UserOwnsFile,
+			&i.DownloadCount,
 		); err != nil {
 			return nil, err
 		}

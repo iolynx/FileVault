@@ -35,7 +35,7 @@ export function UserAccountPopover({ user }: UserAccountPopoverProps) {
 
 	const usedStoragePercentage = (dedupBytes / totalAllowedStorage) * 100;
 	const remainingBytes = Math.max(totalAllowedStorage - dedupBytes, 0);
-	const savedBytes = originalBytes - dedupBytes;
+	const savedBytes = Math.max(originalBytes - dedupBytes, 0);
 	const savingsPercentage = originalBytes > 0 ? (savedBytes / originalBytes) * 100 : 0;
 
 	const Logout = async () => {

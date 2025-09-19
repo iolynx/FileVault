@@ -6,6 +6,7 @@ import (
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db/sqlc"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/util"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -107,12 +108,17 @@ func (r *Repository) UserHasAccess(ctx context.Context, sharedWith int64, fileID
 	})
 }
 
-func (r *Repository) ListFilesForUser(ctx context.Context, userID int64, search string, limit, offset int32) ([]sqlc.ListFilesForUserRow, error) {
+func (r *Repository) ListFilesForUser(ctx context.Context, userID int64, filename string, ownershipStatus int32, mimeType string, uploadedAfter, uploadedBefore pgtype.Timestamptz, limit, offset int32) ([]sqlc.ListFilesForUserRow, error) {
+
 	return r.queries.ListFilesForUser(ctx, sqlc.ListFilesForUserParams{
-		OwnerID: userID,
-		Column2: search,
-		Limit:   limit,
-		Offset:  offset,
+		UserID:          userID,
+		Filename:        filename,
+		MimeType:        mimeType,
+		UploadedAfter:   uploadedAfter,
+		UploadedBefore:  uploadedBefore,
+		OwnershipStatus: ownershipStatus,
+		Limit:           limit,
+		Offset:          offset,
 	})
 }
 
@@ -130,4 +136,8 @@ func (r *Repository) DecrementUserStorage(ctx context.Context, userID int64, ori
 		OriginalStorageBytes: int64(original_storage_decrement),
 		DedupStorageBytes:    int64(dedup_storage_decrement),
 	})
+}
+
+func (r *Repository) IncrementDownloadCount(ctx context.Context, fileID uuid.UUID) error {
+	return r.queries.IncrementFileDownloadCount(ctx, fileID)
 }

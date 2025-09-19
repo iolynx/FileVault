@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/userctx"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/util"
@@ -96,9 +97,10 @@ func (h *FileHandler) GetURL(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *FileHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	fileID := uuid.MustParse(chi.URLParam(r, "id"))
 
-	ownerID, ok := userctx.GetUserID(r.Context())
+	ownerID, ok := userctx.GetUserID(ctx)
 	if !ok {
 		util.WriteError(w, http.StatusUnauthorized, "Missing UserID")
 		return
@@ -112,19 +114,22 @@ func (h *FileHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
 	log.Printf("received request from user %d to download file %s", ownerID, fileID)
 
 	// Check if the user owns the file / is shared the file
-	userHasAccess, err := h.service.repo.UserHasAccess(r.Context(), ownerID, fileID)
+	userHasAccess, err := h.service.repo.UserHasAccess(ctx, ownerID, fileID)
 	if !userHasAccess || err != nil {
 		log.Printf("no access")
 		util.WriteError(w, http.StatusForbidden, "Not Allowed")
 		return
 	}
 
-	blobReader, err := h.service.GetBlobReader(r.Context(), file)
+	blobReader, err := h.service.GetBlobReader(ctx, file)
 	if err != nil {
 		util.WriteError(w, http.StatusInternalServerError, "Cannot read file")
 		return
 	}
 	defer blobReader.Close()
+
+	// increment download count for file
+	h.service.IncrementDownloadCount(ctx, fileID)
 
 	w.Header().Set("Content-Disposition", "attachment; filename=\""+file.Filename+"\"")
 	w.Header().Set("Content-Type", "application/octet-stream")
@@ -137,25 +142,40 @@ type ListFilesResponse struct {
 }
 
 func (h *FileHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
-	ownerID, ok := userctx.GetUserID(r.Context())
+	ctx := r.Context()
+	ownerID, ok := userctx.GetUserID(ctx)
 	if !ok {
 		util.WriteError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 
-	search := r.URL.Query().Get("search")
-	limitStr := r.URL.Query().Get("limit")
-	offsetStr := r.URL.Query().Get("offset")
-
-	limit, _ := strconv.Atoi(limitStr)
-	if limit == 0 {
-		limit = 10
+	req := FileSearchRequest{
+		Filename: r.URL.Query().Get("filename"),
+		MimeType: r.URL.Query().Get("content_type"),
+		Limit:    util.ParseInt32OrDefault(r.URL.Query().Get("limit"), 20),
+		Offset:   util.ParseInt32OrDefault(r.URL.Query().Get("offset"), 0),
 	}
-	offset, _ := strconv.Atoi(offsetStr)
 
-	log.Printf("Obtaining Files for \nownerID: %d, search: %s, limitStr: %d, offsetStr: %d", ownerID, search, limit, offset)
+	if before := r.URL.Query().Get("uploaded_before"); before != "" {
+		if t, err := time.Parse(time.RFC3339, before); err == nil {
+			req.UploadedBefore = &t
+		}
+	}
 
-	files, err := h.service.ListFilesForUser(context.Background(), ownerID, search, int32(limit), int32(offset))
+	if after := r.URL.Query().Get("uploaded_after"); after != "" {
+		if t, err := time.Parse(time.RFC3339, after); err == nil {
+			req.UploadedAfter = &t
+		}
+	}
+
+	if ownershipStatus := r.URL.Query().Get("user_owns_file"); ownershipStatus != "" {
+		req.OwnershipStatus = util.ParseInt32OrDefault(ownershipStatus, 0)
+	}
+
+	log.Printf("Obtaining Files for \nOwnerID: %d, \nFilename: %s, \nMimeType: %s, \nLimit: %d, \nOffset: %d", ownerID, req.Filename, req.MimeType, req.Limit, req.Offset)
+	log.Printf("Ownership Status: %d\nBefore: %s\nAfter: %s", req.OwnershipStatus, req.UploadedBefore, req.UploadedAfter)
+
+	files, err := h.service.ListFilesForUser(context.Background(), ownerID, req)
 	if err != nil {
 		util.WriteError(w, http.StatusInternalServerError, "failed to fetch shared files")
 	}
