@@ -18,7 +18,7 @@ import { Axios, AxiosError } from "axios";
 import { mapUsersToOptions } from "@/lib/utils";
 import { User } from "@/types/User";
 import { MultiSelectOption } from "./multi-select";
-import { ShareDialogModal } from "./ShareDialogModal";
+import { ShareDialogModal } from "@/components/ShareDialogModal";
 
 interface ActionsDropDownProps {
 	file: File;
@@ -31,6 +31,7 @@ export default function ActionsDropdown({ file, onFileChange }: ActionsDropDownP
 	const [isShareDialogOpen, setShareDialogOpen] = useState(false)
 	const [shareDialogOptions, setShareDialogOptions] = useState<MultiSelectOption[]>([]);
 	const [shareDialogDefautValue, setShareDialogDefaultValue] = useState<string[]>([]);
+	const [shareDialogURL, setShareDialogURL] = useState<string>("");
 
 	const fetchUsers = async () => {
 		try {
@@ -49,7 +50,6 @@ export default function ActionsDropdown({ file, onFileChange }: ActionsDropDownP
 			const res = await api.get(`/files/${file.id}/shares`,
 				{ withCredentials: true },
 			)
-			console.log(res.data);
 			const usersWithAccessToFile: User[] = await res.data
 			const userIds = usersWithAccessToFile.map((user) => user.id);
 			setShareDialogDefaultValue(userIds);
@@ -57,9 +57,24 @@ export default function ActionsDropdown({ file, onFileChange }: ActionsDropDownP
 			console.log("error while fetching users with access to file: ", error)
 		}
 	}
+
+	const fetchFileURL = async () => {
+		try {
+			const res = await api.get(`/files/url/${file.id}`,
+				{ withCredentials: true },
+			)
+			console.log(res.data)
+			setShareDialogURL(res.data.url);
+		} catch (error) {
+			console.log("error while fetching link to file:", error)
+		}
+	}
 	useEffect(() => {
 		fetchUsers()
-		fetchUsersWithAccessToFile()
+		if (file.user_owns_file) {
+			fetchUsersWithAccessToFile()
+			fetchFileURL()
+		}
 	}, [isShareDialogOpen])
 
 	const handleDelete = async () => {
@@ -216,8 +231,9 @@ export default function ActionsDropdown({ file, onFileChange }: ActionsDropDownP
 				isOpen={isShareDialogOpen}
 				isOpenChange={setShareDialogOpen}
 				userOptions={shareDialogOptions}
-				onConfirm={(usersToShare) => handleShare(usersToShare)}
+				onConfirm={(usersToShare: string[]) => handleShare(usersToShare)}
 				defaultValue={shareDialogDefautValue}
+				fileURL={shareDialogURL}
 			/>
 
 		</div>

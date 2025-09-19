@@ -85,7 +85,7 @@ func (h *FileHandler) GetURL(w http.ResponseWriter, r *http.Request) {
 
 	url, err := h.service.GetFileURL(context.Background(), uuid.MustParse(fileID), int64(ownerID))
 	if err != nil {
-		log.Print("failed to get file url: ", err)
+		log.Printf("failed to get file url for file %s with err: %s", fileID, err)
 		util.WriteError(w, http.StatusInternalServerError, "failed to get file url")
 		return
 	}

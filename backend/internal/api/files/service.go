@@ -121,7 +121,6 @@ func (s *Service) GetFileURL(ctx context.Context, fileID uuid.UUID, userID int64
 		return "", err
 	}
 
-	// for now, the file is only viewable by its owner
 	if file.OwnerID != userID {
 		return "", errors.New("Unauthorized")
 	}

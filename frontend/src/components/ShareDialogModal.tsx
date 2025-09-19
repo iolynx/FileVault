@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button";
 import { MultiSelect, MultiSelectOption } from "./multi-select";
+import { toast } from "sonner";
 
 interface ShareDialogModalProps {
 	isOpen: boolean;
@@ -18,9 +19,19 @@ interface ShareDialogModalProps {
 	userOptions: MultiSelectOption[];
 	onConfirm: (usersToShare: string[]) => void;
 	defaultValue: string[]
+	fileURL: string;
 }
 
-export function ShareDialogModal({ isOpen, isOpenChange, userOptions, onConfirm, defaultValue }: ShareDialogModalProps) {
+export function ShareDialogModal({ isOpen, isOpenChange, userOptions, onConfirm, defaultValue, fileURL }: ShareDialogModalProps) {
+	const handleCopy = async () => {
+		try {
+			await navigator.clipboard.writeText(fileURL);
+			toast.success("Copied file URL to clipboard")
+		} catch (err) {
+			console.log("Failed to copy file URL", err)
+			toast.error("Could not copy file URL to clipboard")
+		}
+	}
 	const [usersToShare, setUsersToShare] = useState<string[]>([]);
 	return (
 		<Dialog open={isOpen} onOpenChange={isOpenChange}>
@@ -41,12 +52,17 @@ export function ShareDialogModal({ isOpen, isOpenChange, userOptions, onConfirm,
 						/>
 					</div>
 				</div>
-				<DialogFooter className="sm:justify-start">
+				<DialogFooter className="sm:justify-between">
 					<DialogClose asChild>
-						<Button type="button" variant="secondary" onClick={() => onConfirm(usersToShare)}>
+						<Button type="button" variant="outline" onClick={() => onConfirm(usersToShare)}>
 							Done
 						</Button>
 					</DialogClose>
+					<div>
+						<Button variant="outline" onClick={handleCopy}>
+							Copy Link
+						</Button>
+					</div>
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>
