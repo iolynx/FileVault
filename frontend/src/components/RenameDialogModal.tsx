@@ -18,13 +18,15 @@ interface RenameDialogModalProps {
 	isOpenChange: (open: boolean) => void;
 	originalFilename: string;
 	onConfirm: (newFileName: string) => void;
+	context: "Folder" | "File"
 }
 
-export function RenameDialogModal({ isOpen, isOpenChange, originalFilename, onConfirm }: RenameDialogModalProps) {
+export function RenameDialogModal({ isOpen, isOpenChange, originalFilename, onConfirm, context }: RenameDialogModalProps) {
 	const [baseName, setBaseName] = useState('');
 	const [extension, setExtension] = useState('');
 
 	useEffect(() => {
+		console.log(originalFilename);
 		const lastDotIndex = originalFilename.lastIndexOf('.');
 
 		// Handle files with no extension
@@ -52,12 +54,12 @@ export function RenameDialogModal({ isOpen, isOpenChange, originalFilename, onCo
 		<Dialog open={isOpen} onOpenChange={isOpenChange}>
 			<DialogContent className="sm:max-w-md">
 				<DialogHeader>
-					<DialogTitle>Rename File</DialogTitle>
+					<DialogTitle>Rename {context}</DialogTitle>
 				</DialogHeader>
 				<div className="flex items-center gap-2">
 					<div className="grid flex-1 gap-2">
 						<Label htmlFor="link" className="sr-only">
-							New Filename
+							New {context}name
 						</Label>
 						<div className="flex flex-row align-middle text-center">
 							<Input

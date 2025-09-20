@@ -1,12 +1,8 @@
 "use client";
 
 import FilesTable from "@/components/FilesTable";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import api from "@/lib/axios";
-import { APIError } from "@/types/APIError";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { File } from "@/types/File"
@@ -15,6 +11,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useRouter } from "next/navigation";
 import { ActiveFilter, FilterOption } from "@/types/Filter";
 import { SearchAndFilterComponent } from "@/components/SearchAndFilter";
+import { useContentStore } from "@/stores/useContentStore";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 
 const filterOptions: FilterOption[] = [
 	{ value: 'content_type', label: 'MIME Type' },
@@ -26,10 +24,12 @@ const filterOptions: FilterOption[] = [
 const DashboardPage = () => {
 	const [loading, setLoading] = useState(true);
 	const [files, setFiles] = useState<File[]>([]);
-	const [search, setSearch] = useState("");
-	const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
-	const [page, setPage] = useState(0);
 	const router = useRouter();
+
+	const { contents, path, isLoading, fetchContents } = useContentStore();
+	const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
+	const currentFolder = path[path.length - 1];
+	const currentFolderId = currentFolder ? currentFolder.id : null;
 
 	const handleFilterChange = (column: string, value: string | Date | undefined) => {
 		setActiveFilters(prevFilters => {
@@ -59,44 +59,32 @@ const DashboardPage = () => {
 		});
 	};
 
-	const fetchFiles = async (filters: ActiveFilter[]) => {
-		try {
-			setLoading(true);
+	useEffect(() => {
+		const currentFolder = path[path.length - 1];
 
-			// Reduce filters to set of params 
-			const params = filters.reduce((acc, filter) => {
-				acc[filter.column] = filter.value;
-				return acc;
-			}, {} as Record<string, string>);
+		// Convert the filters array to an object for the API.
+		const filtersObject = activeFilters.reduce((acc, filter) => {
+			acc[filter.column] = filter.value;
+			return acc;
+		}, {} as Record<string, string>);
 
-			// Add pagination params
-			params.limit = '10';
-			params.offset = '0';
+		// Debounce the fetch call
+		const debounceTimer = setTimeout(() => {
+			fetchContents(currentFolder.id, filtersObject);
+		}, 250);
 
-			const res = await api.get("/files", {
-				params: params,
-				headers: { "Content-Type": "application/json" },
-				withCredentials: true,
-			});
+		return () => clearTimeout(debounceTimer);
+	}, [path, activeFilters, fetchContents]);
 
-			setFiles(res.data || []);
-			router.refresh();
-		} catch (error: any) {
-			toast.error("Error: Failed to fetch files");
-		} finally {
-			setLoading(false);
-		}
+	const refreshContents = () => {
+		const currentFolder = path[path.length - 1];
+		const filtersObject = activeFilters.reduce((acc, filter) => {
+			acc[filter.column] = filter.value;
+			return acc;
+		}, {} as Record<string, string>);
+		fetchContents(currentFolder.id, filtersObject);
 	};
 
-	useEffect(() => {
-		// Set up a timer to delay the API call
-		const debounceTimer = setTimeout(() => {
-			fetchFiles(activeFilters);
-		}, 500); // debouce of 500ms for user to stop typing
-
-		// Clear the timer if the user types again
-		return () => clearTimeout(debounceTimer);
-	}, [activeFilters]);
 
 	return (
 		<div className="flex flex-col items-center">
@@ -111,15 +99,17 @@ const DashboardPage = () => {
 				/>
 			</div>
 			<div className="m-4">
-				<FileUploadMenu fetchFiles={() => fetchFiles(activeFilters)} />
+				<FileUploadMenu onActionComplete={refreshContents} currentFolderID={currentFolderId} />
 			</div>
 
-			{loading ?
+			{isLoading ?
 				<Skeleton className="h-[500px] w-[86%] rounded-2xl max-w-7xl mt-4" /> :
-				<Card className="rounded-2xl border shadow-sm overflow-hidden w-full max-w-7xl mt-4 pt-1 pb-1">
-					<FilesTable files={files} onFileChange={() => fetchFiles(activeFilters)} />
-
-				</Card>
+				<>
+					<Breadcrumbs />
+					<Card className="rounded-2xl border shadow-sm overflow-hidden w-full max-w-7xl mt-4 pt-1 pb-1">
+						<FilesTable contents={contents} onDataChange={refreshContents} />
+					</Card>
+				</>
 			}
 		</div>
 

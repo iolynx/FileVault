@@ -30,6 +30,7 @@ type File struct {
 	IsPublic      pgtype.Bool        `json:"is_public"`
 	PublicToken   pgtype.UUID        `json:"public_token"`
 	DownloadCount pgtype.Int8        `json:"download_count"`
+	FolderID      pgtype.UUID        `json:"folder_id"`
 }
 
 type FileShare struct {
@@ -38,6 +39,14 @@ type FileShare struct {
 	SharedWith int64              `json:"shared_with"`
 	Permission string             `json:"permission"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+type Folder struct {
+	ID             uuid.UUID          `json:"id"`
+	Name           string             `json:"name"`
+	OwnerID        int64              `json:"owner_id"`
+	ParentFolderID pgtype.UUID        `json:"parent_folder_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
 type User struct {

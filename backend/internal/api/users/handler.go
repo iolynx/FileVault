@@ -8,8 +8,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/apierror"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/apphandler"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/userctx"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/util"
+	"github.com/go-chi/chi/v5"
 )
 
 type Handler struct {
@@ -18,6 +21,11 @@ type Handler struct {
 
 func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
+}
+
+func (h *Handler) RegisterRoutes(r chi.Router) {
+	r.Get("/auth/me", apphandler.MakeHTTPHandler(h.Me))
+	r.Get("/users", apphandler.MakeHTTPHandler(h.GetOtherUsers))
 }
 
 type signupRequest struct {
@@ -104,36 +112,26 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func (h *Handler) GetOtherUsers(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetOtherUsers(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	userID, ok := userctx.GetUserID(ctx)
 	if !ok {
-		util.WriteError(w, http.StatusUnauthorized, "Missing User ID")
-		return
+		return apierror.NewUnauthorizedError()
 	}
 
 	otherUsers, err := h.service.ListOtherUsers(ctx, userID)
 	if err != nil {
-		util.WriteError(w, http.StatusBadRequest, fmt.Sprintf("Error: %s", err))
-		return
+		return err
 	}
 
-	util.WriteJSON(w, http.StatusOK, otherUsers)
+	return util.WriteJSON(w, http.StatusOK, otherUsers)
 }
 
-func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	userID, ok := userctx.GetUserID(ctx)
-	if !ok {
-		util.WriteError(w, http.StatusUnauthorized, "Missing User ID")
-		return
-	}
-
-	user, err := h.service.GetUserByID(ctx, userID)
+func (h *Handler) Me(w http.ResponseWriter, r *http.Request) error {
+	user, err := h.service.GetUserByID(r.Context())
 	if err != nil {
-		util.WriteError(w, http.StatusInternalServerError, "Error while fetching user info")
-		return
+		return err
 	}
 
-	util.WriteJSON(w, http.StatusOK, user)
+	return util.WriteJSON(w, http.StatusOK, user)
 }

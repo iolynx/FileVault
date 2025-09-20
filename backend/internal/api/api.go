@@ -8,6 +8,7 @@ import (
 	"github.com/rs/cors"
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/files"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/folders"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/middleware"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/users"
 )
@@ -16,7 +17,7 @@ type Server struct {
 	Router *chi.Mux
 }
 
-func NewServer(userHandler *users.Handler, fileHandler *files.FileHandler) *Server {
+func NewServer(userHandler *users.Handler, fileHandler *files.FileHandler, folderHandler *folders.Handler) *Server {
 	r := chi.NewRouter()
 
 	corsOptions := cors.New(cors.Options{
@@ -47,24 +48,9 @@ func NewServer(userHandler *users.Handler, fileHandler *files.FileHandler) *Serv
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware(os.Getenv("JWT_SECRET")))
 
-		r.Get("/auth/me", userHandler.Me)
-
-		r.Post("/files/upload", fileHandler.Upload)
-
-		r.Get("/files", fileHandler.ListFiles)
-		//r.Get("/files/me", fileHandler.ListOwnFiles) // list of files owned by user
-		r.Get("/files/url/{id}", fileHandler.GetURL)
-
-		r.Get("/files/{id}", fileHandler.DownloadFile)
-		r.Patch("/files/{id}", fileHandler.UpdateFilename)
-		r.Delete("/files/{id}", fileHandler.DeleteFile)
-
-		r.Post("/files/{id}/share", fileHandler.ShareFile)
-		r.Get("/files/{id}/shares", fileHandler.GetFileShares) //get list of users with access to file
-		r.Delete("/files/{id}/share/{userid}", fileHandler.UnshareFile)
-
-		r.Get("/users", userHandler.GetOtherUsers)
-
+		fileHandler.RegisterRoutes(r)
+		folderHandler.RegisterRoutes(r)
+		userHandler.RegisterRoutes(r)
 	})
 
 	return &Server{Router: r}

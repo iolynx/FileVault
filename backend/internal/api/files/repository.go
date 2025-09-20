@@ -50,14 +50,8 @@ func (r *Repository) DecrementBlobRefCount(ctx context.Context, blobID uuid.UUID
 	return r.queries.DecrementBlobRefcount(ctx, blobID)
 }
 
-func (r *Repository) CreateFile(ctx context.Context, ownerID int64, blobID uuid.UUID, filename string, declaredMime string, size int64) (sqlc.File, error) {
-	return r.queries.CreateFile(ctx, sqlc.CreateFileParams{
-		OwnerID:      ownerID,
-		BlobID:       blobID,
-		Filename:     filename,
-		DeclaredMime: util.NewText(declaredMime),
-		Size:         size,
-	})
+func (r *Repository) CreateFile(ctx context.Context, arg sqlc.CreateFileParams) (sqlc.File, error) {
+	return r.queries.CreateFile(ctx, arg)
 }
 
 func (r *Repository) ListFilesByOwner(ctx context.Context, ownerID int64, search string, limit, offset int32) ([]sqlc.ListFilesByOwnerRow, error) {
@@ -83,6 +77,10 @@ func (r *Repository) ListFilesSharedWithUser(ctx context.Context, userID int64, 
 		Limit:      limit,
 		Offset:     offset,
 	})
+}
+
+func (r *Repository) UpdateFilename(ctx context.Context, arg sqlc.UpdateFilenameParams) (sqlc.File, error) {
+	return r.queries.UpdateFilename(ctx, arg)
 }
 
 func (r *Repository) DoesUserExist(ctx context.Context, userID int64) (bool, error) {
@@ -122,6 +120,14 @@ func (r *Repository) ListFilesForUser(ctx context.Context, userID int64, filenam
 	})
 }
 
+func (r *Repository) ListFolderContents(ctx context.Context, arg sqlc.ListFolderContentsParams) ([]sqlc.ListFolderContentsRow, error) {
+	return r.queries.ListFolderContents(ctx, arg)
+}
+
+func (r *Repository) ListRootContents(ctx context.Context, arg sqlc.ListRootContentsParams) ([]sqlc.ListRootContentsRow, error) {
+	return r.queries.ListRootContents(ctx, arg)
+}
+
 func (r *Repository) IncrementUserStorage(ctx context.Context, userID int64, original_storage_increment, dedup_storage_increment int) error {
 	return r.queries.IncrementUserStorage(ctx, sqlc.IncrementUserStorageParams{
 		ID:                   userID,
@@ -140,4 +146,8 @@ func (r *Repository) DecrementUserStorage(ctx context.Context, userID int64, ori
 
 func (r *Repository) IncrementDownloadCount(ctx context.Context, fileID uuid.UUID) error {
 	return r.queries.IncrementFileDownloadCount(ctx, fileID)
+}
+
+func (r *Repository) GetFolderByID(ctx context.Context, folderID uuid.UUID) (sqlc.Folder, error) {
+	return r.queries.GetFolderByID(ctx, folderID)
 }

@@ -44,8 +44,8 @@ export function SearchAndFilterComponent({ activeFilters, onFilterChange }: Sear
 					className="h-9 rounded-xl"
 					id="search"
 					placeholder="Search by Filename"
-					value={getActiveValue('filename')}
-					onChange={(e) => onFilterChange('filename', e.target.value)}
+					value={getActiveValue('search')}
+					onChange={(e) => onFilterChange('search', e.target.value)}
 				/>
 			</div>
 

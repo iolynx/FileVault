@@ -48,9 +48,9 @@ func (q *Queries) CreateBlob(ctx context.Context, arg CreateBlobParams) (Blob, e
 }
 
 const createFile = `-- name: CreateFile :one
-INSERT INTO files (owner_id, blob_id, filename, declared_mime, size)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, owner_id, blob_id, filename, declared_mime, size, uploaded_at, is_public, public_token, download_count
+INSERT INTO files (owner_id, blob_id, filename, declared_mime, size, folder_id)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, owner_id, blob_id, filename, declared_mime, size, uploaded_at, is_public, public_token, download_count, folder_id
 `
 
 type CreateFileParams struct {
@@ -59,6 +59,7 @@ type CreateFileParams struct {
 	Filename     string      `json:"filename"`
 	DeclaredMime pgtype.Text `json:"declared_mime"`
 	Size         int64       `json:"size"`
+	FolderID     pgtype.UUID `json:"folder_id"`
 }
 
 func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) (File, error) {
@@ -68,6 +69,7 @@ func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) (File, e
 		arg.Filename,
 		arg.DeclaredMime,
 		arg.Size,
+		arg.FolderID,
 	)
 	var i File
 	err := row.Scan(
@@ -81,6 +83,7 @@ func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) (File, e
 		&i.IsPublic,
 		&i.PublicToken,
 		&i.DownloadCount,
+		&i.FolderID,
 	)
 	return i, err
 }
@@ -223,7 +226,7 @@ func (q *Queries) GetBlobBySha(ctx context.Context, sha256 string) (Blob, error)
 }
 
 const getFileByUUID = `-- name: GetFileByUUID :one
-SELECT id, owner_id, blob_id, filename, declared_mime, size, uploaded_at, is_public, public_token, download_count
+SELECT id, owner_id, blob_id, filename, declared_mime, size, uploaded_at, is_public, public_token, download_count, folder_id
 FROM files f
 WHERE f.id = $1
 `
@@ -242,6 +245,7 @@ func (q *Queries) GetFileByUUID(ctx context.Context, id uuid.UUID) (File, error)
 		&i.IsPublic,
 		&i.PublicToken,
 		&i.DownloadCount,
+		&i.FolderID,
 	)
 	return i, err
 }
@@ -510,7 +514,7 @@ func (q *Queries) ListFilesForUser(ctx context.Context, arg ListFilesForUserPara
 }
 
 const listFilesSharedWithUser = `-- name: ListFilesSharedWithUser :many
-SELECT f.id, f.owner_id, f.blob_id, f.filename, f.declared_mime, f.size, f.uploaded_at, f.is_public, f.public_token, f.download_count
+SELECT f.id, f.owner_id, f.blob_id, f.filename, f.declared_mime, f.size, f.uploaded_at, f.is_public, f.public_token, f.download_count, f.folder_id
 FROM files f
 JOIN file_shares fs ON f.id = fs.file_id
 WHERE fs.shared_with = $1
@@ -551,6 +555,211 @@ func (q *Queries) ListFilesSharedWithUser(ctx context.Context, arg ListFilesShar
 			&i.IsPublic,
 			&i.PublicToken,
 			&i.DownloadCount,
+			&i.FolderID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFolderContents = `-- name: ListFolderContents :many
+SELECT 
+    f.id,
+    f.name AS filename,
+    'folder' AS item_type,
+    NULL::bigint AS size,
+    NULL::text AS content_type,
+    f.created_at AS uploaded_at,
+    (f.owner_id = $1) AS user_owns_file,
+    NULL::bigint AS download_count,
+    NULL::uuid AS folder_id
+FROM folders f
+WHERE 
+    f.owner_id = $1
+    AND f.parent_folder_id = $2::UUID
+    AND ($3::TEXT = '' OR f.name ILIKE '%' || $3::TEXT || '%')
+
+UNION ALL
+
+SELECT
+    f.id,
+    f.filename,
+    'file' AS item_type,
+    f.size,
+    f.declared_mime AS content_type,
+    f.uploaded_at,
+    (f.owner_id = $1) AS user_owns_file,
+    f.download_count,
+    f.folder_id
+FROM files f
+WHERE
+    f.owner_id = $1
+    AND f.folder_id = $2::UUID
+    AND ($3::TEXT = '' OR f.filename ILIKE '%' || $3::TEXT || '%')
+    AND ($4::TEXT = '' OR f.declared_mime = $4::TEXT)
+    AND ($5::TIMESTAMPTZ IS NULL OR f.uploaded_at > $5::TIMESTAMPTZ)
+    AND ($6::TIMESTAMPTZ IS NULL OR f.uploaded_at < $6::TIMESTAMPTZ)
+
+ORDER BY item_type ASC, filename ASC
+`
+
+type ListFolderContentsParams struct {
+	UserID         int64              `json:"user_id"`
+	ParentFolderID uuid.UUID          `json:"parent_folder_id"`
+	Search         string             `json:"search"`
+	MimeType       string             `json:"mime_type"`
+	UploadedAfter  pgtype.Timestamptz `json:"uploaded_after"`
+	UploadedBefore pgtype.Timestamptz `json:"uploaded_before"`
+}
+
+type ListFolderContentsRow struct {
+	ID            uuid.UUID          `json:"id"`
+	Filename      string             `json:"filename"`
+	ItemType      string             `json:"item_type"`
+	Size          pgtype.Int8        `json:"size"`
+	ContentType   pgtype.Text        `json:"content_type"`
+	UploadedAt    pgtype.Timestamptz `json:"uploaded_at"`
+	UserOwnsFile  bool               `json:"user_owns_file"`
+	DownloadCount pgtype.Int8        `json:"download_count"`
+	FolderID      pgtype.UUID        `json:"folder_id"`
+}
+
+func (q *Queries) ListFolderContents(ctx context.Context, arg ListFolderContentsParams) ([]ListFolderContentsRow, error) {
+	rows, err := q.db.Query(ctx, listFolderContents,
+		arg.UserID,
+		arg.ParentFolderID,
+		arg.Search,
+		arg.MimeType,
+		arg.UploadedAfter,
+		arg.UploadedBefore,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFolderContentsRow{}
+	for rows.Next() {
+		var i ListFolderContentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Filename,
+			&i.ItemType,
+			&i.Size,
+			&i.ContentType,
+			&i.UploadedAt,
+			&i.UserOwnsFile,
+			&i.DownloadCount,
+			&i.FolderID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRootContents = `-- name: ListRootContents :many
+
+SELECT
+    f.id, f.name AS filename, 'folder' AS item_type, NULL::bigint AS size,
+    NULL::text AS content_type, f.created_at AS uploaded_at,
+    (f.owner_id = $1) AS user_owns_file,
+    NULL::bigint AS download_count, NULL::uuid AS folder_id
+FROM folders f
+WHERE f.owner_id = $1 AND f.parent_folder_id IS NULL
+  AND ($2::TEXT = '' OR f.name ILIKE '%' || $2::TEXT || '%')
+
+UNION ALL
+
+SELECT
+    f.id, f.filename, 'file' AS item_type, f.size, f.declared_mime AS content_type,
+    f.uploaded_at, (f.owner_id = $1) AS user_owns_file,
+    f.download_count, f.folder_id
+FROM files f
+WHERE f.owner_id = $1 AND f.folder_id IS NULL
+  AND ($2::TEXT = '' OR f.filename ILIKE '%' || $2::TEXT || '%')
+  AND ($3::TEXT = '' OR f.declared_mime = $3::TEXT)
+  AND ($4::TIMESTAMPTZ IS NULL OR f.uploaded_at > $4::TIMESTAMPTZ)
+  AND ($5::TIMESTAMPTZ IS NULL OR f.uploaded_at < $5::TIMESTAMPTZ)
+  AND (
+      $6::int = 0
+      OR ($6::int = 1 AND f.owner_id = $1)
+      OR ($6::int = 2 AND f.owner_id <> $1)
+  )
+
+UNION ALL
+
+SELECT
+    f.id, f.filename, 'file' AS item_type, f.size, f.declared_mime AS content_type,
+    f.uploaded_at, (f.owner_id = $1) AS user_owns_file,
+    f.download_count, NULL::uuid as folder_id
+FROM files f
+JOIN file_shares fs ON f.id = fs.file_id
+WHERE fs.shared_with = $1
+  AND ($2::TEXT = '' OR f.filename ILIKE '%' || $2::TEXT || '%')
+  AND ($3::TEXT = '' OR f.declared_mime = $3::TEXT)
+  AND ($4::TIMESTAMPTZ IS NULL OR f.uploaded_at > $4::TIMESTAMPTZ)
+  AND ($5::TIMESTAMPTZ IS NULL OR f.uploaded_at < $5::TIMESTAMPTZ)
+
+ORDER BY item_type ASC, filename ASC
+`
+
+type ListRootContentsParams struct {
+	UserID          int64              `json:"user_id"`
+	Search          string             `json:"search"`
+	MimeType        string             `json:"mime_type"`
+	UploadedAfter   pgtype.Timestamptz `json:"uploaded_after"`
+	UploadedBefore  pgtype.Timestamptz `json:"uploaded_before"`
+	OwnershipStatus int32              `json:"ownership_status"`
+}
+
+type ListRootContentsRow struct {
+	ID            uuid.UUID          `json:"id"`
+	Filename      string             `json:"filename"`
+	ItemType      string             `json:"item_type"`
+	Size          pgtype.Int8        `json:"size"`
+	ContentType   pgtype.Text        `json:"content_type"`
+	UploadedAt    pgtype.Timestamptz `json:"uploaded_at"`
+	UserOwnsFile  bool               `json:"user_owns_file"`
+	DownloadCount pgtype.Int8        `json:"download_count"`
+	FolderID      pgtype.UUID        `json:"folder_id"`
+}
+
+// Order folders before files
+func (q *Queries) ListRootContents(ctx context.Context, arg ListRootContentsParams) ([]ListRootContentsRow, error) {
+	rows, err := q.db.Query(ctx, listRootContents,
+		arg.UserID,
+		arg.Search,
+		arg.MimeType,
+		arg.UploadedAfter,
+		arg.UploadedBefore,
+		arg.OwnershipStatus,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRootContentsRow{}
+	for rows.Next() {
+		var i ListRootContentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Filename,
+			&i.ItemType,
+			&i.Size,
+			&i.ContentType,
+			&i.UploadedAt,
+			&i.UserOwnsFile,
+			&i.DownloadCount,
+			&i.FolderID,
 		); err != nil {
 			return nil, err
 		}
@@ -615,10 +824,11 @@ func (q *Queries) UpdateBlobRefcount(ctx context.Context, arg UpdateBlobRefcount
 	return err
 }
 
-const updateFilename = `-- name: UpdateFilename :exec
+const updateFilename = `-- name: UpdateFilename :one
 UPDATE files
 SET filename = $1
 WHERE id = $2
+RETURNING id, owner_id, blob_id, filename, declared_mime, size, uploaded_at, is_public, public_token, download_count, folder_id
 `
 
 type UpdateFilenameParams struct {
@@ -626,9 +836,23 @@ type UpdateFilenameParams struct {
 	ID       uuid.UUID `json:"id"`
 }
 
-func (q *Queries) UpdateFilename(ctx context.Context, arg UpdateFilenameParams) error {
-	_, err := q.db.Exec(ctx, updateFilename, arg.Filename, arg.ID)
-	return err
+func (q *Queries) UpdateFilename(ctx context.Context, arg UpdateFilenameParams) (File, error) {
+	row := q.db.QueryRow(ctx, updateFilename, arg.Filename, arg.ID)
+	var i File
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.BlobID,
+		&i.Filename,
+		&i.DeclaredMime,
+		&i.Size,
+		&i.UploadedAt,
+		&i.IsPublic,
+		&i.PublicToken,
+		&i.DownloadCount,
+		&i.FolderID,
+	)
+	return i, err
 }
 
 const userHasAccess = `-- name: UserHasAccess :one

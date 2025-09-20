@@ -14,6 +14,7 @@ type Querier interface {
 	CreateBlob(ctx context.Context, arg CreateBlobParams) (Blob, error)
 	CreateFile(ctx context.Context, arg CreateFileParams) (File, error)
 	CreateFileShare(ctx context.Context, arg CreateFileShareParams) (FileShare, error)
+	CreateFolder(ctx context.Context, arg CreateFolderParams) (Folder, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DecrementBlobRefcount(ctx context.Context, id uuid.UUID) (int32, error)
 	DecrementUserStorage(ctx context.Context, arg DecrementUserStorageParams) error
@@ -21,11 +22,13 @@ type Querier interface {
 	DeleteBlobIfUnused(ctx context.Context, id uuid.UUID) error
 	DeleteFile(ctx context.Context, id uuid.UUID) error
 	DeleteFileShare(ctx context.Context, arg DeleteFileShareParams) error
+	DeleteFolder(ctx context.Context, id uuid.UUID) error
 	GetBlobByID(ctx context.Context, id uuid.UUID) (Blob, error)
 	GetBlobBySha(ctx context.Context, sha256 string) (Blob, error)
 	GetFileByUUID(ctx context.Context, id uuid.UUID) (File, error)
 	GetFilesForUser(ctx context.Context, arg GetFilesForUserParams) ([]GetFilesForUserRow, error)
 	GetFilesForUserCount(ctx context.Context, arg GetFilesForUserCountParams) (int64, error)
+	GetFolderByID(ctx context.Context, id uuid.UUID) (Folder, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	IncrementBlobRefcount(ctx context.Context, id uuid.UUID) (int32, error)
@@ -34,10 +37,14 @@ type Querier interface {
 	ListFilesByOwner(ctx context.Context, arg ListFilesByOwnerParams) ([]ListFilesByOwnerRow, error)
 	ListFilesForUser(ctx context.Context, arg ListFilesForUserParams) ([]ListFilesForUserRow, error)
 	ListFilesSharedWithUser(ctx context.Context, arg ListFilesSharedWithUserParams) ([]File, error)
+	ListFolderContents(ctx context.Context, arg ListFolderContentsParams) ([]ListFolderContentsRow, error)
 	ListOtherUsers(ctx context.Context, id int64) ([]ListOtherUsersRow, error)
+	// Order folders before files
+	ListRootContents(ctx context.Context, arg ListRootContentsParams) ([]ListRootContentsRow, error)
 	ListUsersWithAccessToFile(ctx context.Context, fileID uuid.UUID) ([]ListUsersWithAccessToFileRow, error)
 	UpdateBlobRefcount(ctx context.Context, arg UpdateBlobRefcountParams) error
-	UpdateFilename(ctx context.Context, arg UpdateFilenameParams) error
+	UpdateFilename(ctx context.Context, arg UpdateFilenameParams) (File, error)
+	UpdateFolder(ctx context.Context, arg UpdateFolderParams) (Folder, error)
 	UserExists(ctx context.Context, id int64) (bool, error)
 	UserHasAccess(ctx context.Context, arg UserHasAccessParams) (bool, error)
 	UserOwnsBlob(ctx context.Context, arg UserOwnsBlobParams) (int32, error)

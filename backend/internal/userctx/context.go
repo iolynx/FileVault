@@ -6,7 +6,7 @@ import (
 
 type ctxKey string
 
-const userIDKey ctxKey = "userID"
+const userIDKey ctxKey = "user_id"
 
 // SetUserID stores the userID (as int64) in the request context.
 func SetUserID(ctx context.Context, id int64) context.Context {

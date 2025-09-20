@@ -1,7 +1,6 @@
 package files
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,7 +9,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/userctx"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/apierror"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/apphandler"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/util"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -24,25 +24,42 @@ func NewFileHandler(service *Service) *FileHandler {
 	return &FileHandler{service: service}
 }
 
-func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
+func (h *FileHandler) RegisterRoutes(r chi.Router) {
+	r.Post("/files/upload", apphandler.MakeHTTPHandler(h.Upload))
+
+	r.Get("/files", apphandler.MakeHTTPHandler(h.ListContents))
+	r.Get("/files/url/{id}", apphandler.MakeHTTPHandler(h.GetURL))
+
+	r.Get("/files/{id}", apphandler.MakeHTTPHandler(h.DownloadFile))
+	r.Patch("/files/{id}", apphandler.MakeHTTPHandler(h.UpdateFilename))
+	r.Delete("/files/{id}", apphandler.MakeHTTPHandler(h.DeleteFile))
+	//r.Post("/files/{id}/move", fileHandler.MoveFile)
+
+	r.Post("/files/{id}/share", apphandler.MakeHTTPHandler(h.ShareFile))
+	r.Get("/files/{id}/shares", apphandler.MakeHTTPHandler(h.GetFileShares)) //get list of users with access to file
+	r.Delete("/files/{id}/share/{userid}", apphandler.MakeHTTPHandler(h.UnshareFile))
+}
+
+func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) error {
 	err := r.ParseMultipartForm(10 << 20)
 	if err != nil {
 		log.Printf("Error parsing multipart form: %v", err)
-		util.WriteError(w, http.StatusBadRequest, "Could not parse form")
-		return
+		return apierror.NewBadRequestError("Could not parse form")
 	}
 
 	log.Print("Parsed multipart form")
 
 	files := r.MultipartForm.File["files"]
 	if len(files) == 0 {
-		util.WriteError(w, http.StatusBadRequest, "No files were uploaded")
-		return
+		return apierror.NewBadRequestError("No files uploaded")
 	}
 
-	ownerID, ok := userctx.GetUserID(r.Context())
-	if !ok {
-		util.WriteError(w, http.StatusUnauthorized, "userID missing")
+	var folderID *uuid.UUID
+	folderIDStr := r.FormValue("folder_id")
+	if folderIDStr != "" {
+		if parsedUUID, err := uuid.Parse(folderIDStr); err == nil {
+			folderID = &parsedUUID
+		}
 	}
 
 	for _, header := range files {
@@ -50,110 +67,72 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		file, err := header.Open()
 		if err != nil {
 			log.Printf("Error opening file %s: %v", header.Filename, err)
-			util.WriteError(w, http.StatusInternalServerError, "Failed to process file")
-			return
+			return apierror.NewInternalServerError("Failed to process file")
 		}
 		// Use defer inside the loop to ensure each file is closed
 		defer file.Close()
 
 		// Call UploadFile service for each individual file
-		_, err = h.service.UploadFile(r.Context(), ownerID, file, header)
+		_, err = h.service.UploadFile(r.Context(), file, header, folderID)
 		if err != nil {
 			log.Printf("Upload failed for file %s: %v", header.Filename, err)
-			util.WriteError(w, http.StatusInternalServerError, "Upload failed for one or more files")
-			return
+			return apierror.NewInternalServerError("Upload failed for one or more files")
 		}
 	}
 
 	log.Printf("Successfully uploaded %d files", len(files))
-	util.WriteJSON(w, http.StatusOK, map[string]string{
+	return util.WriteJSON(w, http.StatusOK, map[string]string{
 		"message": fmt.Sprintf("Successfully uploaded %d file(s)", len(files)),
 	})
 }
 
-func (h *FileHandler) GetURL(w http.ResponseWriter, r *http.Request) {
+func (h *FileHandler) GetURL(w http.ResponseWriter, r *http.Request) error {
 	fileID := chi.URLParam(r, "id")
 	if fileID == "" {
-		http.Error(w, "missing file UUID", http.StatusBadRequest)
-		return
+		return apierror.NewBadRequestError("Missing file UUID")
 	}
 
-	ownerID, ok := userctx.GetUserID(r.Context())
-	if !ok {
-		util.WriteError(w, http.StatusInternalServerError, "failed to get owner id")
-		return
-	}
-
-	url, err := h.service.GetFileURL(context.Background(), uuid.MustParse(fileID), int64(ownerID))
+	url, err := h.service.GetFileURL(r.Context(), uuid.MustParse(fileID))
 	if err != nil {
-		log.Printf("failed to get file url for file %s with err: %s", fileID, err)
-		util.WriteError(w, http.StatusInternalServerError, "failed to get file url")
-		return
+		return err
 	}
 
-	util.WriteJSON(w, http.StatusOK, map[string]string{
+	return util.WriteJSON(w, http.StatusOK, map[string]string{
 		"url": url,
 	})
 }
 
-func (h *FileHandler) DownloadFile(w http.ResponseWriter, r *http.Request) {
+func (h *FileHandler) DownloadFile(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	fileID := uuid.MustParse(chi.URLParam(r, "id"))
 
-	ownerID, ok := userctx.GetUserID(ctx)
-	if !ok {
-		util.WriteError(w, http.StatusUnauthorized, "Missing UserID")
-		return
-	}
-
-	file, err := h.service.repo.GetFileByUUID(context.Background(), fileID)
+	blobReader, filename, err := h.service.DownloadFile(ctx, fileID)
 	if err != nil {
-		util.WriteError(w, http.StatusInternalServerError, "File not found")
-	}
-
-	log.Printf("received request from user %d to download file %s", ownerID, fileID)
-
-	// Check if the user owns the file / is shared the file
-	userHasAccess, err := h.service.repo.UserHasAccess(ctx, ownerID, fileID)
-	if !userHasAccess || err != nil {
-		log.Printf("no access")
-		util.WriteError(w, http.StatusForbidden, "Not Allowed")
-		return
-	}
-
-	blobReader, err := h.service.GetBlobReader(ctx, file)
-	if err != nil {
-		util.WriteError(w, http.StatusInternalServerError, "Cannot read file")
-		return
+		log.Printf("Error while reading blob: %s", err)
+		return apierror.NewInternalServerError("Cannot read file")
 	}
 	defer blobReader.Close()
 
 	// increment download count for file
 	h.service.IncrementDownloadCount(ctx, fileID)
 
-	w.Header().Set("Content-Disposition", "attachment; filename=\""+file.Filename+"\"")
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
 	w.Header().Set("Content-Type", "application/octet-stream")
-	io.Copy(w, blobReader)
+	_, err = io.Copy(w, blobReader)
+	return err
 }
 
-type ListFilesResponse struct {
-	Owned  []File `json:"owned"`
-	Shared []File `json:"shared"`
-}
-
-func (h *FileHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	ownerID, ok := userctx.GetUserID(ctx)
-	if !ok {
-		util.WriteError(w, http.StatusUnauthorized, "Unauthorized")
-		return
-	}
-
-	req := FileSearchRequest{
-		Filename: r.URL.Query().Get("filename"),
+func (h *FileHandler) ListContents(w http.ResponseWriter, r *http.Request) error {
+	req := ListContentsRequest{
+		Search:   r.URL.Query().Get("search"),
 		MimeType: r.URL.Query().Get("content_type"),
 		Limit:    util.ParseInt32OrDefault(r.URL.Query().Get("limit"), 20),
 		Offset:   util.ParseInt32OrDefault(r.URL.Query().Get("offset"), 0),
+	}
+
+	if folderID := r.URL.Query().Get("folder_id"); folderID != "" {
+		f := uuid.MustParse(folderID)
+		req.FolderID = &f
 	}
 
 	if before := r.URL.Query().Get("uploaded_before"); before != "" {
@@ -172,154 +151,102 @@ func (h *FileHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
 		req.OwnershipStatus = util.ParseInt32OrDefault(ownershipStatus, 0)
 	}
 
-	log.Printf("Obtaining Files for \nOwnerID: %d, \nFilename: %s, \nMimeType: %s, \nLimit: %d, \nOffset: %d", ownerID, req.Filename, req.MimeType, req.Limit, req.Offset)
-	log.Printf("Ownership Status: %d\nBefore: %s\nAfter: %s", req.OwnershipStatus, req.UploadedBefore, req.UploadedAfter)
-
-	files, err := h.service.ListFilesForUser(context.Background(), ownerID, req)
+	contents, err := h.service.ListContents(r.Context(), req)
 	if err != nil {
-		util.WriteError(w, http.StatusInternalServerError, "failed to fetch shared files")
+		log.Printf("Error while trying to retrieve contents: %s", err)
+		return apierror.NewInternalServerError(err.Error())
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(files); err != nil {
-		util.WriteError(w, http.StatusInternalServerError, "failed to encode response")
-	}
+	return util.WriteJSON(w, http.StatusOK, contents)
 }
 
-func (h *FileHandler) DeleteFile(w http.ResponseWriter, r *http.Request) {
-	ownerID, ok := userctx.GetUserID(r.Context())
-	if !ok {
-		util.WriteError(w, http.StatusUnauthorized, "Unauthorized")
-		return
-	}
-
+func (h *FileHandler) DeleteFile(w http.ResponseWriter, r *http.Request) error {
 	fileID := chi.URLParam(r, "id")
 	if fileID == "" {
-		http.Error(w, "missing file UUID", http.StatusBadRequest)
-		return
+		return apierror.NewBadRequestError("Missing file UUID")
 	}
 
-	err := h.service.DeleteFile(context.Background(), uuid.MustParse(fileID), int64(ownerID))
+	err := h.service.DeleteFile(r.Context(), uuid.MustParse(fileID))
 	if err != nil {
 		log.Print("error deleting file:", err)
-		util.WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to delete file: %s", err))
-		return
+		return err
 	}
-	util.WriteJSON(w, http.StatusOK, map[string]string{"message": "File Deleted"})
+
+	w.WriteHeader(http.StatusNoContent)
+	return nil
 }
 
 type UpdateFilenameRequest struct {
-	Filename string `json:"filename"`
+	Filename string `json:"name"`
 }
 
-func (h *FileHandler) UpdateFilename(w http.ResponseWriter, r *http.Request) {
-	ownerID, ok := userctx.GetUserID(r.Context())
-	if !ok {
-		util.WriteError(w, http.StatusUnauthorized, "Unauthorized")
-		return
-	}
-
+func (h *FileHandler) UpdateFilename(w http.ResponseWriter, r *http.Request) error {
 	id := chi.URLParam(r, "id")
-	var req UpdateFilenameRequest
 
+	var req UpdateFilenameRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
+		return apierror.NewBadRequestError("Invalid request body")
 	}
 
 	if req.Filename == "" {
-		http.Error(w, "Filename cannot be empty", http.StatusBadRequest)
-		return
+		return apierror.NewBadRequestError("Filename cannot be empty")
 	}
 
 	log.Printf("Received request to rename file to: %s", req.Filename)
 
 	fileID := uuid.MustParse(id)
-	err = h.service.UpdateFilename(context.Background(), req.Filename, fileID, ownerID)
+	file, err := h.service.UpdateFilename(r.Context(), req.Filename, fileID)
 	if err != nil {
-		log.Print("Error while renaming file: ", err)
-		util.WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Error renaming file: %s", err))
-		return
+		log.Print("Error while renaming file: ", err.Error())
+		return err
 	}
-	util.WriteJSON(w, http.StatusOK, map[string]string{"message": "File Renamed"})
+	return util.WriteJSON(w, http.StatusOK, file)
 }
 
 type ShareFileRequest struct {
 	TargetUserID int64 `json:"target_user_id"`
 }
 
-func (h *FileHandler) ShareFile(w http.ResponseWriter, r *http.Request) {
-	ownerID, ok := userctx.GetUserID(r.Context())
-	if !ok {
-		util.WriteError(w, http.StatusUnauthorized, "Unauthorized")
-		return
-	}
-
+func (h *FileHandler) ShareFile(w http.ResponseWriter, r *http.Request) error {
 	fileID, _ := uuid.Parse(chi.URLParam(r, "id"))
 
 	var req ShareFileRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		util.WriteError(w, http.StatusBadRequest, fmt.Sprintf("Invalid Request Body: %s", err))
-		return
-	}
-	if req.TargetUserID <= 0 {
-		util.WriteError(w, http.StatusBadRequest, "Invalid UserID")
-		return
-	}
-	if int64(req.TargetUserID) == ownerID {
-		util.WriteError(w, http.StatusBadRequest, "Target User ID cannot be Your ID")
-		return
+		return apierror.NewBadRequestError("Invalid Request Body")
 	}
 
-	log.Printf("Received request to share file %s to: %s", fileID, req.TargetUserID)
-	if err := h.service.ShareFile(r.Context(), fileID, ownerID, req.TargetUserID); err != nil {
-		util.WriteError(w, http.StatusForbidden, err.Error())
-		return
+	log.Printf("Received request to share file %s to: %d", fileID, req.TargetUserID)
+	if err := h.service.ShareFile(r.Context(), fileID, req.TargetUserID); err != nil {
+		return err
 	}
 
-	util.WriteJSON(w, http.StatusOK, map[string]string{"message": "Shared file successfully"})
+	return util.WriteJSON(w, http.StatusOK, map[string]string{"message": "Shared file successfully"})
 }
 
-func (h *FileHandler) GetFileShares(w http.ResponseWriter, r *http.Request) {
-	userID, ok := userctx.GetUserID(r.Context())
-	if !ok {
-		util.WriteError(w, http.StatusUnauthorized, "Unauthorized")
-	}
-
+func (h *FileHandler) GetFileShares(w http.ResponseWriter, r *http.Request) error {
 	fileID, _ := uuid.Parse(chi.URLParam(r, "id"))
-
-	users, err := h.service.ListUsersWithAccesToFile(r.Context(), fileID, userID)
+	users, err := h.service.ListUsersWithAccesToFile(r.Context(), fileID)
 	if err != nil {
-		util.WriteError(w, http.StatusInternalServerError, err.Error())
-		return
+		return err
 	}
 
-	util.WriteJSON(w, http.StatusOK, users)
+	return util.WriteJSON(w, http.StatusOK, users)
 }
 
-func (h *FileHandler) UnshareFile(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	ownerID, ok := userctx.GetUserID(ctx)
-	if !ok {
-		util.WriteError(w, http.StatusUnauthorized, "Unauthorized")
-		return
-	}
-
+func (h *FileHandler) UnshareFile(w http.ResponseWriter, r *http.Request) error {
 	fileID, _ := uuid.Parse(chi.URLParam(r, "id"))
 	targetUserID, err := strconv.Atoi(chi.URLParam(r, "userid"))
 	if err != nil {
-		util.WriteError(w, http.StatusBadRequest, "Invalid UserID")
-		return
+		return apierror.NewBadRequestError("Invalid UserID")
 	}
 
 	log.Printf("Received request to unshare file %s from: %d", fileID, targetUserID)
-
-	if err := h.service.RemoveFileShare(r.Context(), fileID, ownerID, int64(targetUserID)); err != nil {
-		util.WriteError(w, http.StatusForbidden, err.Error())
-		return
+	if err := h.service.RemoveFileShare(r.Context(), fileID, int64(targetUserID)); err != nil {
+		return err
 	}
 
-	util.WriteJSON(w, http.StatusOK, map[string]string{"message": "Unshared file successfully"})
+	return util.WriteJSON(w, http.StatusOK, map[string]string{"message": "Unshared file successfully"})
 }

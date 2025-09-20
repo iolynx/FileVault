@@ -5,17 +5,19 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"log"
 	"mime/multipart"
 	"time"
 
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/apierror"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db/sqlc"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/storage"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/userctx"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/util"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Service struct {
@@ -44,8 +46,23 @@ func NewService(repo *Repository, storage storage.Storage) *Service {
 	return &Service{repo: repo, storage: storage}
 }
 
-func (s *Service) UploadFile(ctx context.Context, ownerID int64, file multipart.File, header *multipart.FileHeader) (sqlc.File, error) {
+func (s *Service) UploadFile(ctx context.Context, file multipart.File, header *multipart.FileHeader, folderID *uuid.UUID) (sqlc.File, error) {
 	// Compute hash (sha256)
+	ownerID, ok := userctx.GetUserID(ctx)
+	if !ok {
+		return sqlc.File{}, apierror.NewUnauthorizedError()
+	}
+
+	if folderID != nil {
+		folder, err := s.repo.GetFolderByID(ctx, *folderID)
+		if err != nil {
+			return sqlc.File{}, apierror.NewNotFoundError("Folder not found")
+		}
+		if folder.OwnerID != ownerID {
+			return sqlc.File{}, apierror.NewForbiddenError()
+		}
+	}
+
 	hasher := sha256.New()
 	buf, err := io.ReadAll(io.TeeReader(file, hasher))
 	if err != nil {
@@ -68,8 +85,20 @@ func (s *Service) UploadFile(ctx context.Context, ownerID int64, file multipart.
 			return sqlc.File{}, err
 		}
 
+		params := sqlc.CreateFileParams{
+			OwnerID:      ownerID,
+			BlobID:       blob.ID,
+			Filename:     header.Filename,
+			DeclaredMime: util.NewText(header.Header.Get("Content-Type")),
+			Size:         blob.Size,
+		}
+		if folderID != nil {
+			params.FolderID = pgtype.UUID{Bytes: *folderID, Valid: true}
+		}
 		// Create file record pointing to existing blob
-		return s.repo.CreateFile(ctx, ownerID, blob.ID, header.Filename, header.Header.Get("Content-Type"), blob.Size)
+		log.Println("creating with these params:")
+		log.Print(params)
+		return s.repo.CreateFile(ctx, params)
 	}
 
 	// New blob: upload to storage with this objectKey
@@ -79,7 +108,7 @@ func (s *Service) UploadFile(ctx context.Context, ownerID int64, file multipart.
 	if err != nil {
 		return sqlc.File{}, err
 	}
-	log.Print("uploaded blob")
+	log.Print("Uploaded Blob")
 
 	// Create blob record
 	newBlob, err := s.repo.CreateBlob(ctx, sha, objectKey, header.Header.Get("Content-Type"), int64(len(buf)))
@@ -92,7 +121,20 @@ func (s *Service) UploadFile(ctx context.Context, ownerID int64, file multipart.
 	s.repo.IncrementUserStorage(ctx, ownerID, int(newBlob.Size), int(newBlob.Size))
 
 	// Create file record referencing blob
-	return s.repo.CreateFile(ctx, ownerID, newBlob.ID, header.Filename, header.Header.Get("Content-Type"), int64(len(buf)))
+
+	params := sqlc.CreateFileParams{
+		OwnerID:      ownerID,
+		BlobID:       newBlob.ID,
+		Filename:     header.Filename,
+		DeclaredMime: util.NewText(header.Header.Get("Content-Type")),
+		Size:         int64(len(buf)),
+	}
+	if folderID != nil {
+		params.FolderID = pgtype.UUID{Bytes: *folderID, Valid: true}
+	}
+	log.Println("creating with these params:")
+	log.Print(params)
+	return s.repo.CreateFile(ctx, params)
 }
 
 // ListFiles returns a list of files owned by a particular User
@@ -118,25 +160,68 @@ func (s *Service) ListFilesByOwner(ctx context.Context, ownerID int64, search st
 	return files, nil
 }
 
-func (s *Service) GetFileURL(ctx context.Context, fileID uuid.UUID, userID int64) (string, error) {
+func (s *Service) GetFileURL(ctx context.Context, fileID uuid.UUID) (string, error) {
+	userID, ok := userctx.GetUserID(ctx)
+	if !ok {
+		return "", apierror.NewInternalServerError("Failed to get UserID")
+	}
+
 	file, err := s.repo.GetFileByUUID(ctx, fileID)
 	if err != nil {
 		return "", err
 	}
 
 	if file.OwnerID != userID {
-		return "", errors.New("Unauthorized")
+		return "", apierror.NewForbiddenError()
 	}
 
 	blob, err := s.repo.GetBlobByID(ctx, file.BlobID)
 	if err != nil {
-		return "", errors.New("unable to fetch blob")
+		return "", apierror.NewInternalServerError("Unable to fetch blob")
 	}
 
 	return s.storage.GetBlobURL(ctx, blob.StoragePath)
 }
 
-func (s *Service) DeleteFile(ctx context.Context, fileID uuid.UUID, userID int64) error {
+func (s *Service) GetFileByUUID(ctx context.Context, fileID uuid.UUID) (sqlc.File, error) {
+	return s.repo.GetFileByUUID(ctx, fileID)
+}
+
+func (s *Service) DownloadFile(ctx context.Context, fileID uuid.UUID) (io.ReadCloser, string, error) {
+
+	ownerID, ok := userctx.GetUserID(ctx)
+	if !ok {
+		return nil, "", apierror.NewUnauthorizedError()
+	}
+
+	log.Printf("received request from user %d to download file %s", ownerID, fileID)
+
+	// Check if the user owns the file / is shared the file
+	userHasAccess, err := s.repo.UserHasAccess(ctx, ownerID, fileID)
+	if !userHasAccess || err != nil {
+		log.Printf("no access")
+		return nil, "", apierror.NewForbiddenError()
+	}
+
+	file, err := s.GetFileByUUID(ctx, fileID)
+	if err != nil {
+		return nil, "", apierror.NewInternalServerError("File not found")
+	}
+
+	blobReader, err := s.GetBlobReader(ctx, file)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return blobReader, file.Filename, nil
+}
+
+func (s *Service) DeleteFile(ctx context.Context, fileID uuid.UUID) error {
+	userID, ok := userctx.GetUserID(ctx)
+	if !ok {
+		return apierror.NewUnauthorizedError()
+	}
+
 	file, err := s.repo.GetFileByUUID(ctx, fileID)
 	if err != nil {
 		return err
@@ -144,7 +229,7 @@ func (s *Service) DeleteFile(ctx context.Context, fileID uuid.UUID, userID int64
 
 	// ownership check
 	if file.OwnerID != userID {
-		return errors.New("Cannot delete file owned by another user")
+		return apierror.NewForbiddenError()
 	}
 
 	// delete the file record
@@ -202,35 +287,65 @@ func (s *Service) GetBlobReader(ctx context.Context, file sqlc.File) (io.ReadClo
 	return obj, nil
 }
 
-func (s *Service) UpdateFilename(ctx context.Context, newFilename string, fileID uuid.UUID, ownerID int64) error {
+func (s *Service) UpdateFilename(ctx context.Context, newFilename string, fileID uuid.UUID) (File, error) {
+	userID, ok := userctx.GetUserID(ctx)
+	if !ok {
+		return File{}, apierror.NewUnauthorizedError()
+	}
+
 	file, err := s.repo.GetFileByUUID(ctx, fileID)
 	if err != nil {
-		return err
+		return File{}, err
 	}
 
-	if file.OwnerID != ownerID {
-		return errors.New("Unauthorized")
+	if file.OwnerID != userID {
+		return File{}, apierror.NewForbiddenError()
 	}
 
-	return s.repo.queries.UpdateFilename(ctx, sqlc.UpdateFilenameParams{
+	file, err = s.repo.queries.UpdateFilename(ctx, sqlc.UpdateFilenameParams{
 		Filename: newFilename,
 		ID:       fileID,
 	})
+	if err != nil {
+		return File{}, err
+	}
+
+	return File{
+		ID:            file.ID,
+		Size:          file.Size,
+		Filename:      file.Filename,
+		ContentType:   file.DeclaredMime.String,
+		UploadedAt:    file.UploadedAt.Time,
+		UserOwnsFile:  file.OwnerID == userID,
+		DownloadCount: &file.DownloadCount.Int64,
+	}, nil
 }
 
-func (s *Service) ShareFile(ctx context.Context, fileID uuid.UUID, ownerID, targetUserID int64) error {
+func (s *Service) ShareFile(ctx context.Context, fileID uuid.UUID, targetUserID int64) error {
+	ownerID, ok := userctx.GetUserID(ctx)
+	if !ok {
+		return apierror.NewUnauthorizedError()
+	}
+
 	file, err := s.repo.GetFileByUUID(ctx, fileID)
 	if err != nil {
 		return err
 	}
 
+	if targetUserID <= 0 {
+		return apierror.NewBadRequestError("Invalid UserID")
+	}
+	if int64(targetUserID) == ownerID {
+		return apierror.NewBadRequestError("Target User ID cannot be your ID")
+	}
+
 	if file.OwnerID != ownerID {
-		return errors.New("Not Authorized")
+		return apierror.NewForbiddenError()
 	}
 
 	userExists, _ := s.repo.DoesUserExist(ctx, targetUserID)
 	if !userExists {
-		return errors.New("User does not exist")
+		return apierror.NewInternalServerError("User does not exist")
 	}
 
 	_, err = s.repo.CreateFileShare(ctx, fileID, targetUserID)
@@ -258,29 +373,39 @@ func (s *Service) ListFilesSharedWithUser(ctx context.Context, userID int64, sea
 	return files, nil
 }
 
-func (s *Service) RemoveFileShare(ctx context.Context, fileID uuid.UUID, ownerID, sharedWith int64) error {
+func (s *Service) RemoveFileShare(ctx context.Context, fileID uuid.UUID, sharedWith int64) error {
+	ownerID, ok := userctx.GetUserID(ctx)
+	if !ok {
+		return apierror.NewUnauthorizedError()
+	}
+
 	file, err := s.repo.GetFileByUUID(ctx, fileID)
 	if err != nil {
-		return err
+		return apierror.NewNotFoundError("File not found")
 	}
 
 	if file.OwnerID != ownerID {
-		return errors.New("not authorized to unshare this file")
+		return apierror.NewForbiddenError()
 	}
 
 	return s.repo.DeleteFileShare(ctx, fileID, sharedWith)
 }
 
-func (s *Service) ListUsersWithAccesToFile(ctx context.Context, fileID uuid.UUID, ownerID int64) ([]User, error) {
+func (s *Service) ListUsersWithAccesToFile(ctx context.Context, fileID uuid.UUID) ([]User, error) {
+	userID, ok := userctx.GetUserID(ctx)
+	if !ok {
+		return nil, apierror.NewUnauthorizedError()
+	}
+
 	file, _ := s.repo.GetFileByUUID(ctx, fileID)
 
-	if file.OwnerID != ownerID {
-		return nil, errors.New("Unauthorized")
+	if file.OwnerID != userID {
+		return nil, apierror.NewForbiddenError()
 	}
 
 	userRows, err := s.repo.ListUsersWithAccessToFile(ctx, fileID)
 	if err != nil {
-		return nil, err
+		return nil, apierror.NewInternalServerError()
 	}
 
 	usersWithAccess := make([]User, 0, len(userRows))
@@ -296,56 +421,129 @@ func (s *Service) ListUsersWithAccesToFile(ctx context.Context, fileID uuid.UUID
 	return usersWithAccess, nil
 }
 
-type FileSearchRequest struct {
-	Filename        string     `json:"filename"`
-	MimeType        string     `json:"mime_type"`
-	UploadedBefore  *time.Time `json:"uploaded_before"`
+type ContentItem struct {
+	ID            uuid.UUID `json:"id"`
+	ItemType      string    `json:"item_type"` // "file" or "folder"
+	Filename      string    `json:"filename"`
+	Size          *int64    `json:"size,omitempty"`
+	ContentType   *string   `json:"content_type,omitempty"`
+	UploadedAt    time.Time `json:"uploaded_at"`
+	UserOwnsFile  bool      `json:"user_owns_file"`
+	DownloadCount *int64    `json:"download_count,omitempty"`
+}
+
+type ListContentsRequest struct {
+	FolderID        *uuid.UUID `json:"folder_id"`
+	Search          string     `json:"search"`
+	MimeType        string     `json:"content_type"`
 	UploadedAfter   *time.Time `json:"uploaded_after"`
-	OwnershipStatus int32      `json:"ownership_status"`
+	UploadedBefore  *time.Time `json:"uploaded_before"`
+	OwnershipStatus int32      `json:"user_owns_file"`
 	Limit           int32      `json:"limit"`
 	Offset          int32      `json:"offset"`
 }
 
-func (s *Service) ListFilesForUser(ctx context.Context, userID int64, req FileSearchRequest) ([]File, error) {
+func (s *Service) ListContents(ctx context.Context, req ListContentsRequest) ([]ContentItem, error) {
+	userID, ok := userctx.GetUserID(ctx)
+	if !ok {
+		return nil, apierror.NewUnauthorizedError()
+	}
+	var items []ContentItem
+	var err error
 
-	fileRows, err := s.repo.ListFilesForUser(
-		ctx,
-		userID,
-		req.Filename,
-		req.OwnershipStatus,
-		req.MimeType,
-		util.TimeToTimestamptz(req.UploadedAfter),
-		util.TimeToTimestamptz(req.UploadedBefore),
-		req.Limit,
-		req.Offset,
-	)
+	log.Printf("Retrieving contents of folder: %s", req.FolderID)
+
+	if req.FolderID != nil {
+		parentFolder, err := s.repo.queries.GetFolderByID(ctx, *req.FolderID)
+		log.Printf("Parent folder: %s", parentFolder.Name)
+		if err != nil {
+			return nil, apierror.NewNotFoundError("Folder not found")
+		}
+		if parentFolder.OwnerID != userID {
+			return nil, apierror.NewForbiddenError()
+		}
+
+		params := sqlc.ListFolderContentsParams{
+			UserID:         userID,
+			ParentFolderID: *req.FolderID,
+			Search:         req.Search,
+			MimeType:       req.MimeType,
+			UploadedAfter:  util.TimeToTimestamptz(req.UploadedAfter),
+			UploadedBefore: util.TimeToTimestamptz(req.UploadedBefore),
+		}
+		rows, repoErr := s.repo.ListFolderContents(ctx, params)
+		err = repoErr
+		items = mapListFolderContentsRows(rows)
+	} else {
+		params := sqlc.ListRootContentsParams{
+			UserID:          userID,
+			Search:          req.Search,
+			MimeType:        req.MimeType,
+			UploadedAfter:   util.TimeToTimestamptz(req.UploadedAfter),
+			UploadedBefore:  util.TimeToTimestamptz(req.UploadedBefore),
+			OwnershipStatus: req.OwnershipStatus,
+		}
+		rows, repoErr := s.repo.ListRootContents(ctx, params)
+		err = repoErr
+		items = mapListRootContentsRows(rows)
+	}
 
 	if err != nil {
 		return nil, err
 	}
 
-	files := make([]File, 0, len(fileRows))
-	for _, r := range fileRows {
-		dto := File{
+	return items, nil
+}
+
+func mapListFolderContentsRows(rows []sqlc.ListFolderContentsRow) []ContentItem {
+	items := make([]ContentItem, len(rows))
+	for i, r := range rows {
+		item := ContentItem{
 			ID:           r.ID,
+			ItemType:     r.ItemType,
 			Filename:     r.Filename,
-			Size:         r.Size,
-			ContentType:  r.ContentType.String,
+			UploadedAt:   r.UploadedAt.Time,
+			UserOwnsFile: r.UserOwnsFile,
+		}
+		// Safely assign nullable fields
+		if r.Size.Valid {
+			item.Size = &r.Size.Int64
+		}
+		if r.ContentType.Valid {
+			item.ContentType = &r.ContentType.String
+		}
+		if r.DownloadCount.Valid {
+			item.DownloadCount = &r.DownloadCount.Int64
+		}
+		items[i] = item
+	}
+	return items
+}
+
+func mapListRootContentsRows(rows []sqlc.ListRootContentsRow) []ContentItem {
+	items := make([]ContentItem, len(rows))
+	for i, r := range rows {
+		item := ContentItem{
+			ID:           r.ID,
+			ItemType:     r.ItemType,
+			Filename:     r.Filename,
 			UploadedAt:   r.UploadedAt.Time,
 			UserOwnsFile: r.UserOwnsFile,
 		}
 
-		// if user owns the file, return its download count
-		// else, download_count is nil and will be omitted
-		// from the response.
-		if dto.UserOwnsFile {
-			count := r.DownloadCount.Int64
-			dto.DownloadCount = &count
+		// Safely assign nullable fields
+		if r.Size.Valid {
+			item.Size = &r.Size.Int64
 		}
-		files = append(files, dto)
+		if r.ContentType.Valid {
+			item.ContentType = &r.ContentType.String
+		}
+		if r.DownloadCount.Valid {
+			item.DownloadCount = &r.DownloadCount.Int64
+		}
+		items[i] = item
 	}
-
-	return files, nil
+	return items
 }
 
 func (s *Service) IncrementDownloadCount(ctx context.Context, fileID uuid.UUID) error {

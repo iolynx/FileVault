@@ -6,7 +6,9 @@ import (
 	"log"
 	"time"
 
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/apierror"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db/sqlc"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/userctx"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -77,7 +79,7 @@ type User struct {
 func (s *Service) ListOtherUsers(ctx context.Context, userID int64) ([]User, error) {
 	otherUsersRow, err := s.repo.ListOtherUsers(ctx, userID)
 	if err != nil {
-		return nil, err
+		return nil, apierror.NewInternalServerError("error while fetching users")
 	}
 
 	otherUsers := make([]User, 0, len(otherUsersRow))
@@ -100,10 +102,15 @@ type Me struct {
 	DedupStorageBytes    int64  `json:"dedup_storage_bytes"`
 }
 
-func (s *Service) GetUserByID(ctx context.Context, userID int64) (Me, error) {
+func (s *Service) GetUserByID(ctx context.Context) (Me, error) {
+	userID, ok := userctx.GetUserID(ctx)
+	if !ok {
+		return Me{}, apierror.NewUnauthorizedError()
+	}
+
 	user, err := s.repo.GetUserByID(ctx, userID)
 	if err != nil {
-		return Me{}, err
+		return Me{}, apierror.NewInternalServerError()
 	}
 
 	return Me{

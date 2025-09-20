@@ -29,7 +29,8 @@ CREATE TABLE files (
   uploaded_at TIMESTAMPTZ DEFAULT now(),
   is_public BOOLEAN DEFAULT FALSE,
   public_token UUID,
-  download_count BIGINT DEFAULT 0
+  download_count BIGINT DEFAULT 0,
+  folder_id UUID REFERENCES folders(id) ON DELETE SET NULL
 );
 
 CREATE TABLE file_shares (
@@ -41,9 +42,17 @@ CREATE TABLE file_shares (
     UNIQUE(file_id, shared_with)
 );
 
+CREATE TABLE folders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    owner_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    parent_folder_id UUID REFERENCES folders(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 CREATE INDEX idx_blobs_sha256 ON blobs(sha256);
 CREATE INDEX idx_files_owner ON files(owner_id);
-CREATE INDEX idx_files_owner_filename
-ON files(owner_id, filename);
+CREATE INDEX idx_files_owner_filename ON files(owner_id, filename);
+CREATE INDEX idx_folders_owner_id_parent_id ON folders(owner_id, parent_folder_id);
+CREATE INDEX idx_files_folder_id ON files(folder_id);
 

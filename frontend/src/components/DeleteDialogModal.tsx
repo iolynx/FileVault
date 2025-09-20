@@ -13,18 +13,19 @@ interface DeleteDialogModalProps {
 	isOpen: boolean;
 	isOpenChange: (open: boolean) => void;
 	onConfirm: () => void;
+	context: "Folder" | "File"
 }
 
-export function DeleteDialogModal({ isOpen, isOpenChange, onConfirm }: DeleteDialogModalProps) {
+export function DeleteDialogModal({ isOpen, isOpenChange, onConfirm, context }: DeleteDialogModalProps) {
 	return (
 		<AlertDialog open={isOpen} onOpenChange={isOpenChange}>
 			<AlertDialogContent>
 				<AlertDialogHeader>
 					<AlertDialogTitle>
-						Are you sure you want to delete this File?
+						Are you sure you want to delete this {context}?
 					</AlertDialogTitle>
 					<AlertDialogDescription>
-						This action cannot be undone. This will permanently delete the File.
+						This will permanently delete the {context}. This action cannot be undone.
 					</AlertDialogDescription>
 				</AlertDialogHeader>
 				<AlertDialogFooter>

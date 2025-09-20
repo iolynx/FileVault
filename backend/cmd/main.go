@@ -7,6 +7,7 @@ import (
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/files"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/folders"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/users"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/config"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db"
@@ -41,7 +42,12 @@ func main() {
 	fileService := files.NewService(fileRepo, store)
 	fileHandler := files.NewFileHandler(fileService)
 
-	server := api.NewServer(userHandler, fileHandler)
+	// Initialize Folders Repository, Service, Handler
+	folderRepo := folders.NewRepository(pool)
+	foldersService := folders.NewService(folderRepo)
+	foldersHandler := folders.NewHandler(foldersService)
+
+	server := api.NewServer(userHandler, fileHandler, foldersHandler)
 
 	log.Println("server listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", server.Router))
