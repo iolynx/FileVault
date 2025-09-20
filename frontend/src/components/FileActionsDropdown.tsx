@@ -124,7 +124,7 @@ export default function FileActionsDropdown({ file, onFileChange }: ActionsDropD
 				return
 			}
 			const res = await api.patch(`/files/${file.id}`,
-				{ filename: newFilename },
+				{ name: newFilename },
 				{ headers: { "Content-Type": "application/json" }, withCredentials: true }
 			)
 			toast.success(`Renamed file to ${res.data.filename}`);

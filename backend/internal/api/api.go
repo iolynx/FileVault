@@ -3,8 +3,10 @@ package api
 import (
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/redis/go-redis/v9"
 	"github.com/rs/cors"
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/files"
@@ -17,7 +19,7 @@ type Server struct {
 	Router *chi.Mux
 }
 
-func NewServer(userHandler *users.Handler, fileHandler *files.FileHandler, folderHandler *folders.Handler) *Server {
+func NewServer(userHandler *users.Handler, fileHandler *files.FileHandler, folderHandler *folders.Handler, redisClient *redis.Client) *Server {
 	r := chi.NewRouter()
 
 	corsOptions := cors.New(cors.Options{
@@ -47,6 +49,7 @@ func NewServer(userHandler *users.Handler, fileHandler *files.FileHandler, folde
 	// Protected routes
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware(os.Getenv("JWT_SECRET")))
+		r.Use(middleware.RateLimiter(redisClient, 2, 1*time.Second))
 
 		fileHandler.RegisterRoutes(r)
 		folderHandler.RegisterRoutes(r)

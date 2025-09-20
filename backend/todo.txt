@@ -6,9 +6,7 @@
 (FEAT)
 - add folders
 	- move file
-- drag and drop upload
 - check mimetype
-- rate limits 
 - storage quota alert
 - admin panel (show all files, all download counts)
 - move all folders up in search results

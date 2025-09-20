@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/util"
 	"github.com/joho/godotenv"
 )
 
@@ -15,6 +16,7 @@ type Config struct {
 	Server   ServerConfig
 	Database DBConfig
 	Minio    MinioConfig
+	Redis    RedisConfig
 }
 
 // ServerConfig holds HTTP server settings.
@@ -36,25 +38,28 @@ type MinioConfig struct {
 	Secure   bool
 }
 
+type RedisConfig struct {
+	Addr     string
+	Password string
+	DB       int
+}
+
 // LoadConfig reads configuration from environment variables.
 func LoadConfig() (*Config, error) {
-	err := godotenv.Load("cmd/.env")
+	err := godotenv.Load("../.env")
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
 
-	// Validate required environment variables
-	if os.Getenv("PORT") == "" ||
-		os.Getenv("MINIO_ENDPOINT") == "" ||
-		os.Getenv("MINIO_ACCESS") == "" ||
-		os.Getenv("MINIO_SECRET") == "" ||
-		os.Getenv("MINIO_BUCKET") == "" ||
-		os.Getenv("DB_USER") == "" ||
-		os.Getenv("DB_PASSWORD") == "" ||
-		os.Getenv("DB_HOST") == "" ||
-		os.Getenv("DB_PORT") == "" ||
-		os.Getenv("DB_NAME") == "" {
-		return nil, errors.New("error: missing one or more required environment variables")
+	requiredVars := []string{
+		"PORT", "MINIO_ENDPOINT", "MINIO_ACCESS", "MINIO_SECRET",
+		"MINIO_BUCKET", "DB_USER", "DB_PASSWORD", "DB_HOST", "DB_PORT",
+		"DB_NAME", "REDIS_ADDR",
+	}
+	for _, v := range requiredVars {
+		if os.Getenv(v) == "" {
+			return nil, fmt.Errorf("error: missing required environment variable: %s", v)
+		}
 	}
 
 	//Load Database URL
@@ -86,6 +91,11 @@ func LoadConfig() (*Config, error) {
 			Secret:   os.Getenv("MINIO_SECRET"),
 			Bucket:   os.Getenv("MINIO_BUCKET"),
 			Secure:   minioSecure,
+		},
+		Redis: RedisConfig{
+			Addr:     os.Getenv("REDIS_ADDR"),
+			Password: os.Getenv("REDIS_PASSWORD"),
+			DB:       util.ParseIntOrDefault(os.Getenv("REDIS_DB"), 0),
 		},
 	}
 

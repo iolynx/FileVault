@@ -1,0 +1,23 @@
+{
+  "name": "balkanid-intern-task",
+  "version": "1.0.0",
+  "description": "Secure, deduplicated file storage platform (Go backend + React frontend).",
+  "main": "index.js",
+  "scripts": {
+    "dev:services": "docker-compose up -d db redis minio",
+    "dev:backend": "cd backend && dotenv -e ../.env -- air",
+    "services:stop": "docker-compose down"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/issues"
+  },
+  "homepage": "https://github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx#readme"
+}
