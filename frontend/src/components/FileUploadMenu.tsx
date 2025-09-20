@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { Progress } from '@/components/ui/progress';
 import { Input } from './ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
+import { useFileUploader } from '@/hooks/useFileUploader';
 
 interface FileUploadMenuProps {
 	onActionComplete: () => void;
@@ -30,68 +31,14 @@ export function FileUploadMenu({ onActionComplete, currentFolderID }: FileUpload
 	const [isCreating, setIsCreating] = useState(false);
 	const toastIdRef = useRef<string | number>(null);
 
+	const { uploadFiles } = useFileUploader({
+		onUploadComplete: onActionComplete,
+	})
+
 	const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
 		const files = event.target.files;
 		if (files && files.length > 0) {
-			handleUpload(Array.from(files));
-		}
-	};
-
-	const handleUpload = async (files: File[]) => {
-		const formData = new FormData();
-		files.forEach((file) => {
-			console.log('adding:', file);
-			formData.append('files', file);
-		});
-
-		if (currentFolderID) {
-			formData.append('folder_id', currentFolderID);
-		}
-
-		setUploadProgress(0); // Start progress tracking
-
-		try {
-			toastIdRef.current = toast.custom((t) => (
-				<div className="bg-white border-2 rounded-lg shadow-lg p-4 w-64">
-					<span>Uploading...</span>
-					<Progress value={0} className="w-full mt-2" />
-				</div>
-			));
-			const response = await api.post('/files/upload', formData, {
-				headers: {
-					'Content-Type': 'multipart/form-data',
-				},
-				withCredentials: true,
-				onUploadProgress: (progressEvent) => {
-					if (progressEvent.total) {
-						const percentCompleted = Math.round(
-							(progressEvent.loaded * 100) / progressEvent.total
-						);
-						setUploadProgress(percentCompleted);
-						if (toastIdRef.current) {
-							toast.custom((t) => (
-								<div className="bg-black border-2 rounded-lg p-4 w-64">
-									<span>Uploading... {percentCompleted}%</span>
-									<Progress value={percentCompleted} className="w-full mt-2" />
-								</div>
-							), { id: toastIdRef.current });
-						}
-					}
-				},
-			});
-
-			console.log('Upload successful!', response.data);
-		} catch (error) {
-			console.error('Upload failed:', error);
-			toast.error("Upload Failed!");
-		} finally {
-			onActionComplete();
-			if (toastIdRef.current) {
-				toast.dismiss(toastIdRef.current);
-				toast.success('Files uploaded successfully!');
-			}
-			setUploadProgress(null);
-			toastIdRef.current = null;
+			uploadFiles(Array.from(files), currentFolderID);
 		}
 	};
 
@@ -103,15 +50,13 @@ export function FileUploadMenu({ onActionComplete, currentFolderID }: FileUpload
 
 		setIsCreating(true);
 		try {
-			// Make the API call to your backend
 			await api.post('/folders', {
 				name: newFolderName.trim(),
-				parent_folder_id: currentFolderID, // Can be null for root
+				parent_folder_id: currentFolderID,
 			}, { withCredentials: true });
 
 			toast.success(`Folder "${newFolderName.trim()}" created successfully!`);
 
-			// Reset and close the modal
 			setFolderModalOpen(false);
 			setNewFolderName('');
 
@@ -119,7 +64,6 @@ export function FileUploadMenu({ onActionComplete, currentFolderID }: FileUpload
 			onActionComplete();
 
 		} catch (error) {
-			console.log('error:', error)
 			console.error('Failed to create folder:', error);
 			toast.error('Failed to create folder.');
 		} finally {

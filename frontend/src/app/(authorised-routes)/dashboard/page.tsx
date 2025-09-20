@@ -5,7 +5,6 @@ import { Card } from "@/components/ui/card";
 import api from "@/lib/axios";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { File } from "@/types/File"
 import { FileUploadMenu } from "@/components/FileUploadMenu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRouter } from "next/navigation";
@@ -13,6 +12,9 @@ import { ActiveFilter, FilterOption } from "@/types/Filter";
 import { SearchAndFilterComponent } from "@/components/SearchAndFilter";
 import { useContentStore } from "@/stores/useContentStore";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { DropzoneOverlay } from "@/components/DropzoneOverlay";
+import { useDragAndDrop } from "@/hooks/useDragAndDrop";
+import { useFileUploader } from "@/hooks/useFileUploader";
 
 const filterOptions: FilterOption[] = [
 	{ value: 'content_type', label: 'MIME Type' },
@@ -22,10 +24,7 @@ const filterOptions: FilterOption[] = [
 ];
 
 const DashboardPage = () => {
-	const [loading, setLoading] = useState(true);
-	const [files, setFiles] = useState<File[]>([]);
 	const router = useRouter();
-
 	const { contents, path, isLoading, fetchContents } = useContentStore();
 	const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
 	const currentFolder = path[path.length - 1];
@@ -85,33 +84,48 @@ const DashboardPage = () => {
 		fetchContents(currentFolder.id, filtersObject);
 	};
 
+	const handleUpload = async (files: File[]) => {
+		const currentFolderId = path[path.length - 1]?.id || null;
+		uploadFiles(files, currentFolderId)
+		console.log("Uploading files from drop:", files);
+	};
+
+	const { uploadFiles } = useFileUploader({
+		onUploadComplete: refreshContents,
+	})
+
+	const { isDragging } = useDragAndDrop({ onDrop: (files) => handleUpload(files) });
 
 	return (
-		<div className="flex flex-col items-center">
-			<div className="flex flex-col items-center my-10">
-				<h1 className="text-3xl font-bold"> Dashboard </h1>
-				<p> View and Manage your files here.</p>
-			</div>
-			<div>
-				<SearchAndFilterComponent
-					activeFilters={activeFilters}
-					onFilterChange={handleFilterChange}
-				/>
-			</div>
-			<div className="m-4">
-				<FileUploadMenu onActionComplete={refreshContents} currentFolderID={currentFolderId} />
-			</div>
+		<>
+			<DropzoneOverlay isDragging={isDragging} />
 
-			{isLoading ?
-				<Skeleton className="h-[500px] w-[86%] rounded-2xl max-w-7xl mt-4" /> :
-				<>
-					<Breadcrumbs />
-					<Card className="rounded-2xl border shadow-sm overflow-hidden w-full max-w-7xl mt-4 pt-1 pb-1">
-						<FilesTable contents={contents} onDataChange={refreshContents} />
-					</Card>
-				</>
-			}
-		</div>
+			<div className="flex flex-col items-center">
+				<div className="flex flex-col items-center my-10">
+					<h1 className="text-3xl font-bold"> Dashboard </h1>
+					<p> View and Manage your files here.</p>
+				</div>
+				<div>
+					<SearchAndFilterComponent
+						activeFilters={activeFilters}
+						onFilterChange={handleFilterChange}
+					/>
+				</div>
+				<div className="m-4">
+					<FileUploadMenu onActionComplete={refreshContents} currentFolderID={currentFolderId} />
+				</div>
+
+				{isLoading ?
+					<Skeleton className="h-[500px] w-[86%] rounded-2xl max-w-7xl mt-4" /> :
+					<>
+						<Breadcrumbs />
+						<Card className="rounded-2xl border shadow-sm overflow-hidden w-full max-w-7xl mt-4 pt-1 pb-1">
+							<FilesTable contents={contents} onDataChange={refreshContents} />
+						</Card>
+					</>
+				}
+			</div>
+		</>
 
 	)
 }
