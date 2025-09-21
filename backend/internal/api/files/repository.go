@@ -69,6 +69,10 @@ func (r *Repository) CreateFileShare(ctx context.Context, fileID uuid.UUID, targ
 	})
 }
 
+func (r *Repository) DeleteFile(ctx context.Context, fileID uuid.UUID) error {
+	return r.queries.DeleteFile(ctx, fileID)
+}
+
 func (r *Repository) ListFilesSharedWithUser(ctx context.Context, userID int64, search string, limit, offset int32) ([]sqlc.File, error) {
 	return r.queries.ListFilesSharedWithUser(ctx, sqlc.ListFilesSharedWithUserParams{
 		SharedWith: userID,
@@ -153,4 +157,8 @@ func (r *Repository) GetFolderByID(ctx context.Context, folderID uuid.UUID) (sql
 
 func (r *Repository) ListAllFiles(ctx context.Context, arg sqlc.ListAllFilesParams) ([]sqlc.ListAllFilesRow, error) {
 	return r.queries.ListAllFiles(ctx, arg)
+}
+
+func (r *Repository) DeleteBlobIfUnused(ctx context.Context, blobID uuid.UUID) error {
+	return r.queries.DeleteBlobIfUnused(ctx, blobID)
 }

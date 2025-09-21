@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { User } from '@/types/User';
 
 /**
- * Fetches the current user from the backend API on the server.
+ * Fetches the current user from the /auth/me endpoint on the server.
  * It forwards the request cookies to authenticate the request.
  * @returns {Promise<User | null>} The user object or null if not authenticated.
  */

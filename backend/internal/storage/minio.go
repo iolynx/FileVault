@@ -63,7 +63,7 @@ func (m *MinioStorage) UploadBlob(ctx context.Context, r io.Reader, fileName str
 
 // Get the public URL for the object. Here fileName represents the object name and not the actual file's name
 func (m *MinioStorage) GetBlobURL(ctx context.Context, fileName string) (string, error) {
-	expiry := time.Minute * 15
+	expiry := time.Hour * 24
 	url, err := m.Client.PresignedGetObject(ctx, m.BucketName, fileName, expiry, nil)
 	if err != nil {
 		return "", err

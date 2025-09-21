@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/apierror"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/users"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db/sqlc"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/storage"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/userctx"
@@ -24,8 +25,9 @@ import (
 )
 
 type Service struct {
-	repo    *Repository
-	storage storage.Storage
+	usersRepo *users.Repository
+	repo      *Repository
+	storage   storage.Storage
 }
 
 type File struct {
@@ -56,8 +58,12 @@ type User struct {
 	Permission string `json:"permission"`
 }
 
-func NewService(repo *Repository, storage storage.Storage) *Service {
-	return &Service{repo: repo, storage: storage}
+func NewService(filesRepo *Repository, usersRepo *users.Repository, storage storage.Storage) *Service {
+	return &Service{
+		repo:      filesRepo,
+		usersRepo: usersRepo,
+		storage:   storage,
+	}
 }
 
 func (s *Service) UploadFile(ctx context.Context, file multipart.File, header *multipart.FileHeader, folderID *uuid.UUID) (sqlc.File, error) {
@@ -124,7 +130,7 @@ func (s *Service) UploadFile(ctx context.Context, file multipart.File, header *m
 
 	// New blob: upload to storage with this objectKey after checking storage quota
 	// Get this user's storage quota
-	user, err := s.repo.queries.GetUserByID(ctx, ownerID)
+	user, err := s.usersRepo.GetUserByID(ctx, ownerID)
 	if err != nil {
 		return sqlc.File{}, apierror.NewInternalServerError("Could not retrieve internal data")
 	}
@@ -264,7 +270,7 @@ func (s *Service) DeleteFile(ctx context.Context, fileID uuid.UUID) error {
 	}
 
 	// delete the file record
-	if err := s.repo.queries.DeleteFile(ctx, fileID); err != nil {
+	if err := s.repo.DeleteFile(ctx, fileID); err != nil {
 		return err
 	}
 
@@ -284,7 +290,7 @@ func (s *Service) DeleteFile(ctx context.Context, fileID uuid.UUID) error {
 		if err := s.storage.DeleteBlob(ctx, blob.StoragePath); err != nil {
 			return err
 		}
-		if err := s.repo.queries.DeleteBlobIfUnused(ctx, file.BlobID); err != nil {
+		if err := s.repo.DeleteBlobIfUnused(ctx, file.BlobID); err != nil {
 			return err
 		}
 
@@ -333,7 +339,7 @@ func (s *Service) UpdateFilename(ctx context.Context, newFilename string, fileID
 		return FileResponse{}, apierror.NewForbiddenError()
 	}
 
-	file, err = s.repo.queries.UpdateFilename(ctx, sqlc.UpdateFilenameParams{
+	file, err = s.repo.UpdateFilename(ctx, sqlc.UpdateFilenameParams{
 		Filename: newFilename,
 		ID:       fileID,
 	})
@@ -629,4 +635,75 @@ func (s *Service) ListAllFiles(ctx context.Context, limit, offset int32, sortBy,
 		SortBy:    sortBy,
 		SortOrder: sortOrder,
 	})
+}
+
+type ShareInfoResponse struct {
+	ShareURL   string `json:"shareURL"`
+	SharedWith []User `json:"sharedWith"`
+	AllUsers   []User `json:"allUsers"`
+}
+
+func (s *Service) GetShareInfo(ctx context.Context, fileID uuid.UUID) (ShareInfoResponse, error) {
+	userID, ok := userctx.GetUserID(ctx)
+	if !ok {
+		return ShareInfoResponse{}, apierror.NewUnauthorizedError()
+	}
+
+	// Ownership check
+	file, err := s.repo.GetFileByUUID(ctx, fileID)
+	if err != nil {
+		return ShareInfoResponse{}, apierror.NewNotFoundError("File")
+	}
+	if file.OwnerID != userID {
+		return ShareInfoResponse{}, apierror.NewForbiddenError()
+	}
+
+	// Get the blob, the blob's storagePath is the share URL
+	blob, err := s.repo.GetBlobByID(ctx, file.BlobID)
+	if err != nil {
+		return ShareInfoResponse{}, apierror.NewInternalServerError("Unable to fetch blob")
+	}
+
+	shareURL, err := s.storage.GetBlobURL(ctx, blob.StoragePath)
+	if err != nil {
+		return ShareInfoResponse{}, err
+	}
+
+	// Get the list of users the file is currently shared with
+	sharedWithRows, err := s.repo.ListUsersWithAccessToFile(ctx, fileID)
+	if err != nil {
+		return ShareInfoResponse{}, err
+	}
+
+	// Get the list of all other users to share with
+	allUsersRows, err := s.usersRepo.ListOtherUsers(ctx, userID)
+	if err != nil {
+		return ShareInfoResponse{}, err
+	}
+
+	sharedWith := make([]User, 0, len(sharedWithRows))
+	for _, r := range sharedWithRows {
+		sharedWith = append(sharedWith, User{
+			ID:         r.ID,
+			Name:       r.Name,
+			Email:      r.Email,
+			Permission: r.Permission,
+		})
+	}
+
+	allUsers := make([]User, 0, len(allUsersRows))
+	for _, r := range allUsersRows {
+		allUsers = append(allUsers, User{
+			ID:    r.ID,
+			Name:  r.Name,
+			Email: r.Email,
+		})
+	}
+
+	// Bundle and return response
+	return ShareInfoResponse{
+		ShareURL:   shareURL,
+		SharedWith: sharedWith,
+		AllUsers:   allUsers,
+	}, nil
 }

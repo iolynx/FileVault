@@ -21,14 +21,14 @@ import { ShareDialogModal } from "@/components/ShareDialogModal";
 import { ContentItem } from "@/types/Content";
 import { InfoModal } from "@/components/InfoModal";
 import { useContentStore } from "@/stores/useContentStore";
+import { useAuthStore } from "@/stores/useAuthStore";
 
 interface ActionsDropDownProps {
 	file: ContentItem;
 	onFileChange: () => void;
-	shareDialogOptions: MultiSelectOption[];
 }
 
-export default function FileActionsDropdown({ file, onFileChange, shareDialogOptions }: ActionsDropDownProps) {
+export default function FileActionsDropdown({ file }: ActionsDropDownProps) {
 	const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false)
 	const [isRenameDialogOpen, setRenameDialogOpen] = useState(false)
 	const [isShareDialogOpen, setShareDialogOpen] = useState(false)
@@ -36,34 +36,28 @@ export default function FileActionsDropdown({ file, onFileChange, shareDialogOpt
 	const [shareDialogURL, setShareDialogURL] = useState<string>("");
 	const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
 	const { renameItem, deleteItem } = useContentStore();
+	const [shareDialogOptions, setShareDialogOptions] = useState<MultiSelectOption[]>([]);
+	const { fetchUser } = useAuthStore();
 
-	const fetchUsersWithAccessToFile = async () => {
+	const fetchShareInfo = async () => {
 		try {
-			const res = await api.get(`/files/${file.id}/shares`,
+			const res = await api.get(`/files/${file.id}/share-info`,
 				{ withCredentials: true },
 			)
-			const usersWithAccessToFile: User[] = await res.data
+			const usersWithAccessToFile: User[] = await res.data.sharedWith;
+			console.log('shared with: ', res.data.sharedWith);
+			console.log('users:', res.data.allUsers);
 			const userIds = usersWithAccessToFile.map((user) => user.id);
 			setShareDialogDefaultValue(userIds);
+			setShareDialogURL(res.data.shareURL);
+			setShareDialogOptions(mapUsersToOptions(res.data.allUsers));
 		} catch (error) {
 			console.log("error while fetching users with access to file: ", error)
 		}
 	}
-
-	const fetchFileURL = async () => {
-		try {
-			const res = await api.get(`/files/url/${file.id}`,
-				{ withCredentials: true },
-			)
-			setShareDialogURL(res.data.url);
-		} catch (error) {
-			console.log("error while fetching link to file ", file.filename)
-		}
-	}
 	useEffect(() => {
 		if (file.user_owns_file && file.item_type === 'file' && isShareDialogOpen) {
-			fetchUsersWithAccessToFile();
-			fetchFileURL();
+			fetchShareInfo()
 		}
 	}, [isShareDialogOpen])
 
@@ -72,6 +66,7 @@ export default function FileActionsDropdown({ file, onFileChange, shareDialogOpt
 			const res = await api.delete(`/files/${file.id}`, { withCredentials: true });
 			if (res.status === 204) {
 				toast.success("Deleted file successfully");
+				fetchUser();
 				deleteItem(file.id);
 			} else {
 				toast.error(res.data.error);

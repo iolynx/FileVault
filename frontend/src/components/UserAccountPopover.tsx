@@ -14,13 +14,13 @@ import api from '@/lib/axios';
 import { useRouter } from 'next/navigation';
 import { useContentStore } from '@/stores/useContentStore';
 import { User } from '@/types/User';
+import { useAuthStore } from '@/stores/useAuthStore';
 
-interface UserAccountPopoverProps {
-	user: User | null;
-}
 
-export function UserAccountPopover({ user }: UserAccountPopoverProps) {
+export function UserAccountPopover() {
 	// Return an empty div if user data hasn't loaded yet
+	const user = useAuthStore((state) => state.user);
+
 	if (user === null || user === undefined || user.name === undefined) {
 		return (
 			<Popover>

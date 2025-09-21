@@ -4,6 +4,9 @@ import { useRef, useState } from 'react';
 import api from '@/lib/axios';
 import { toast } from 'sonner';
 import { Progress } from '@/components/ui/progress';
+import { useAuthStore } from '@/stores/useAuthStore';
+import { useDebounce } from './useDebounce';
+import { retry } from '@/lib/retry';
 
 interface UseFileUploaderProps {
 	onUploadComplete: () => void;
@@ -12,6 +15,7 @@ interface UseFileUploaderProps {
 export const useFileUploader = ({ onUploadComplete }: UseFileUploaderProps) => {
 	const [isUploading, setIsUploading] = useState(false);
 	const toastIdRef = useRef<string | number | null>(null);
+	const { fetchUser } = useAuthStore();
 
 	const uploadFiles = async (files: File[], currentFolderId: string | null) => {
 		if (isUploading) return; // Prevent multiple simultaneous uploads
@@ -55,6 +59,7 @@ export const useFileUploader = ({ onUploadComplete }: UseFileUploaderProps) => {
 			if (toastIdRef.current) {
 				toast.dismiss(toastIdRef.current);
 				toast.success('Files uploaded successfully!');
+				setTimeout(fetchUser, 1200);
 			}
 		} catch (error: any) {
 			console.log('Upload failed:', error);

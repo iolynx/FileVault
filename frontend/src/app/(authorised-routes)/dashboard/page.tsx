@@ -15,9 +15,6 @@ import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { DropzoneOverlay } from "@/components/DropzoneOverlay";
 import { useDragAndDrop } from "@/hooks/useDragAndDrop";
 import { useFileUploader } from "@/hooks/useFileUploader";
-import { MultiSelectOption } from "@/components/multi-select";
-import { mapUsersToOptions } from "@/lib/utils";
-import { User } from "@/types/User";
 import { SortConfig } from "@/types/Sort";
 import { DataTablePagination } from '@/components/DataTablePagination';
 import { useDebounce } from "@/hooks/useDebounce";
@@ -41,22 +38,7 @@ const DashboardPage = () => {
 
 	const currentFolder = path[path.length - 1];
 	const currentFolderId = currentFolder ? currentFolder.id : null;
-	const [shareDialogOptions, setShareDialogOptions] = useState<MultiSelectOption[]>([]);
 
-	const fetchUsers = async () => {
-		try {
-			const res = await api.get("/users",
-				{ withCredentials: true },
-			)
-			const users: User[] = await res.data
-			setShareDialogOptions(mapUsersToOptions(users));
-		} catch (error: any) {
-			if (error.response.status == 429) {
-				console.log("Too many requests");
-			}
-			console.log("error while fetching users:", error)
-		}
-	}
 
 	const handleFilterChange = (column: string, value: string | Date | undefined) => {
 		setActiveFilters(prevFilters => {
@@ -121,10 +103,9 @@ const DashboardPage = () => {
 		}
 
 		// Debounce the fetch call
+		// TOOD: do this using useDebounce
 		const debounceTimer = setTimeout(() => {
 			fetchContents(currentFolder.id, filtersObject, pagination);
-			// TODO: move fetchusers to whenever the share modal is opened
-			fetchUsers();
 		}, 750);
 
 		return () => clearTimeout(debounceTimer);
@@ -137,7 +118,6 @@ const DashboardPage = () => {
 			return acc;
 		}, {} as Record<string, string>);
 		fetchContents(currentFolder.id, filtersObject, pagination);
-		fetchUsers();
 	};
 
 	const handleUpload = async (files: File[]) => {
@@ -147,7 +127,6 @@ const DashboardPage = () => {
 	};
 
 	const { uploadFiles } = useFileUploader({
-		// TODO: just update the state on the frontend instead of fetching again
 		onUploadComplete: refreshContents,
 	})
 
@@ -192,7 +171,6 @@ const DashboardPage = () => {
 							<FilesTable
 								contents={contents}
 								onDataChange={refreshContents}
-								shareDialogOptions={shareDialogOptions}
 								sortConfig={sortConfig}
 								onSort={handleSort}
 							/>

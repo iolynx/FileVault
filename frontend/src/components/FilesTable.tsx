@@ -1,13 +1,12 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { File } from "@/types/File"
-import { cn, formatBytes } from "@/lib/utils";
+import { cn, formatBytes, mapUsersToOptions } from "@/lib/utils";
 import { getFileIcon } from "./FileIcon";
 import { ContentItem } from "@/types/Content";
 import { ArrowDown, ArrowUp, FolderIcon, FolderOpen } from "lucide-react";
 import FileActionsDropdown from "./FileActionsDropdown";
 import { useContentStore } from "@/stores/useContentStore";
 import FolderActionsDropdown from "./FolderActionsDropdown";
-import { MultiSelectOption } from "./multi-select";
 import { SortConfig } from "@/types/Sort";
 import { SortableHeader } from "@/components/SortableHeader";
 
@@ -15,19 +14,16 @@ import { SortableHeader } from "@/components/SortableHeader";
 interface FilesTableProps {
 	contents: ContentItem[];
 	onDataChange: () => void;
-	shareDialogOptions: MultiSelectOption[];
 	sortConfig: SortConfig;
 	onSort: (key: string) => void;
 }
 
-export default function FilesTable({ contents, onDataChange, shareDialogOptions, sortConfig, onSort }: FilesTableProps) {
+export default function FilesTable({ contents, onDataChange, sortConfig, onSort }: FilesTableProps) {
 	const { navigateToFolder } = useContentStore();
 
 	const handleRowClick = (item: ContentItem) => {
 		if (item.item_type === 'folder') {
 			navigateToFolder({ id: item.id, filename: item.filename });
-		} else {
-			// do nothing
 		}
 	};
 
@@ -91,7 +87,6 @@ export default function FilesTable({ contents, onDataChange, shareDialogOptions,
 										<FileActionsDropdown
 											file={contentItem}
 											onFileChange={onDataChange}
-											shareDialogOptions={shareDialogOptions}
 										/>
 									) : (
 										<FolderActionsDropdown

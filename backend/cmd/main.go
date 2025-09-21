@@ -54,7 +54,7 @@ func main() {
 
 	// Initialize Files Repository, Service, Handler
 	fileRepo := files.NewRepository(dbRepo)
-	fileService := files.NewService(fileRepo, store)
+	fileService := files.NewService(fileRepo, userRepo, store)
 	fileHandler := files.NewFileHandler(fileService)
 
 	// Initialize Folders Repository, Service, Handler

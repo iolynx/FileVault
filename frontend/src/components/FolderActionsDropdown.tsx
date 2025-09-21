@@ -17,6 +17,7 @@ import api from "@/lib/axios";
 import { toast } from "sonner";
 import { useContentStore } from "@/stores/useContentStore";
 import { InfoModal } from "./InfoModal";
+import { useAuthStore } from "@/stores/useAuthStore";
 
 interface ActionsDropDownProps {
 	folder: ContentItem;
@@ -28,6 +29,7 @@ export default function FolderActionsDropdown({ folder, onFolderChange }: Action
 	const [isRenameDialogOpen, setRenameDialogOpen] = useState(false)
 	const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
 	const { deleteItem, renameItem } = useContentStore();
+	const { fetchUser } = useAuthStore();
 
 	const handleDelete = async () => {
 		try {
@@ -35,6 +37,7 @@ export default function FolderActionsDropdown({ folder, onFolderChange }: Action
 			if (res.status === 204) {
 				toast.success("Deleted folder successfully");
 				deleteItem(folder.id)
+				fetchUser();
 			} else {
 				toast.error(res.data.error);
 			}

@@ -37,7 +37,7 @@ func (h *FileHandler) RegisterRoutes(r chi.Router) {
 	//r.Post("/files/{id}/move", fileHandler.MoveFile)
 
 	r.Post("/files/{id}/share", apphandler.MakeHTTPHandler(h.ShareFile))
-	r.Get("/files/{id}/shares", apphandler.MakeHTTPHandler(h.GetFileShares)) //get list of users with access to file
+	r.Get("/files/{id}/share-info", apphandler.MakeHTTPHandler(h.GetShareInfo))
 	r.Delete("/files/{id}/share/{userid}", apphandler.MakeHTTPHandler(h.UnshareFile))
 }
 
@@ -262,16 +262,6 @@ func (h *FileHandler) ShareFile(w http.ResponseWriter, r *http.Request) error {
 	return util.WriteJSON(w, http.StatusOK, map[string]string{"message": "Shared file successfully"})
 }
 
-func (h *FileHandler) GetFileShares(w http.ResponseWriter, r *http.Request) error {
-	fileID, _ := uuid.Parse(chi.URLParam(r, "id"))
-	users, err := h.service.ListUsersWithAccesToFile(r.Context(), fileID)
-	if err != nil {
-		return err
-	}
-
-	return util.WriteJSON(w, http.StatusOK, users)
-}
-
 func (h *FileHandler) UnshareFile(w http.ResponseWriter, r *http.Request) error {
 	fileID, _ := uuid.Parse(chi.URLParam(r, "id"))
 	targetUserID, err := strconv.Atoi(chi.URLParam(r, "userid"))
@@ -333,6 +323,8 @@ func (h *FileHandler) ListAllFiles(w http.ResponseWriter, r *http.Request) error
 	for _, r := range fileRows {
 		files = append(files, ListAllFilesResponse{
 			ID:            r.ID.String(),
+			OwnerID:       r.OwnerID,
+			OwnerEmail:    r.OwnerEmail,
 			Filename:      r.Filename,
 			Size:          r.Size,
 			DeclaredMime:  r.DeclaredMime.String,
@@ -353,4 +345,22 @@ func (h *FileHandler) ListAllFiles(w http.ResponseWriter, r *http.Request) error
 
 	return util.WriteJSON(w, http.StatusOK, response)
 
+}
+
+// GetShareInfo handles the HTTP request for file sharing data.
+// It parses the file ID from the URL, calls the file service to retrieve the
+// consolidated sharing information, and writes the result as a JSON response.
+func (h *FileHandler) GetShareInfo(w http.ResponseWriter, r *http.Request) error {
+	fileIDStr := chi.URLParam(r, "id")
+	fileID, err := uuid.Parse(fileIDStr)
+	if err != nil {
+		return apierror.NewBadRequestError("Invalid fileID")
+	}
+
+	shareInfo, err := h.service.GetShareInfo(r.Context(), fileID)
+	if err != nil {
+		return err
+	}
+
+	return util.WriteJSON(w, http.StatusOK, shareInfo)
 }

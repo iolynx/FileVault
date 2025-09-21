@@ -36,7 +36,6 @@ export default function AdminFilesTable({ files, sortConfig, onSort, onDataChang
 						<SortableHeader columnKey="download_count" sortConfig={sortConfig} onSort={onSort}>
 							Downloads
 						</SortableHeader>
-						<TableHead>Actions</TableHead>
 					</TableRow>
 				</TableHeader>
 				<TableBody>
@@ -57,11 +56,6 @@ export default function AdminFilesTable({ files, sortConfig, onSort, onDataChang
 							<TableCell>{formatBytes(file.size)}</TableCell>
 							<TableCell>{new Date(file.uploaded_at).toLocaleDateString()}</TableCell>
 							<TableCell>{file.download_count}</TableCell>
-							<TableCell>
-								{/* Admin actions would be different, e.g., delete, view owner, etc. */}
-								{/* For now, a placeholder: */}
-								<MoreHorizontal className="h-4 w-4" />
-							</TableCell>
 						</TableRow>
 					))}
 				</TableBody>
