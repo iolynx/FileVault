@@ -7,7 +7,7 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT NOW(),
     original_storage_bytes BIGINT NOT NULL DEFAULT 0,
     dedup_storage_bytes BIGINT NOT NULL DEFAULT 0,
-    storage_quota BIGINT NOT NULL DEFAULT 1000000
+    storage_quota BIGINT NOT NULL DEFAULT 10000000
 );
 
 CREATE TABLE blobs (

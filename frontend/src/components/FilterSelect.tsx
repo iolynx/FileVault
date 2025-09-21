@@ -4,11 +4,13 @@ import {
 	Select,
 	SelectContent,
 	SelectItem,
+	SelectLabel,
 	SelectTrigger,
 	SelectValue,
 } from '@/components/ui/select';
 import { Button } from './ui/button';
 import { X } from 'lucide-react';
+import { SelectGroup } from '@radix-ui/react-select';
 
 type SelectOption = {
 	value: string;
@@ -20,6 +22,7 @@ interface FilterSelectProps {
 	value: string;
 	onChange: (newValue: string) => void;
 	placeholder: string;
+	type: "Location" | "Filetype";
 }
 
 export function FilterSelect({
@@ -27,6 +30,7 @@ export function FilterSelect({
 	value,
 	onChange,
 	placeholder,
+	type
 }: FilterSelectProps) {
 	return (
 		<div className="relative flex items-center">
@@ -38,11 +42,18 @@ export function FilterSelect({
 					<SelectValue placeholder={placeholder} />
 				</SelectTrigger>
 				<SelectContent>
-					{options.map((option) => (
-						<SelectItem key={option.value} value={option.value}>
-							{option.label}
-						</SelectItem>
-					))}
+					<SelectGroup>
+						{
+							type === "Location"
+								? (<SelectLabel>Filter by Location</SelectLabel>)
+								: (<SelectLabel>Filter by Filetype</SelectLabel>)
+						}
+						{options.map((option) => (
+							<SelectItem key={option.value} value={option.value}>
+								{option.label}
+							</SelectItem>
+						))}
+					</SelectGroup>
 				</SelectContent>
 			</Select>
 

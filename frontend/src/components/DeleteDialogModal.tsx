@@ -25,7 +25,8 @@ export function DeleteDialogModal({ isOpen, isOpenChange, onConfirm, context }: 
 						Are you sure you want to delete this {context}?
 					</AlertDialogTitle>
 					<AlertDialogDescription>
-						This will permanently delete the {context}. This action cannot be undone.
+						This will permanently delete the {context}, {context === "Folder" && (<p>and recursively delete all files and subfolders within this folder.</p>)}
+						This action cannot be undone.
 					</AlertDialogDescription>
 				</AlertDialogHeader>
 				<AlertDialogFooter>

@@ -2,7 +2,7 @@ import api from "@/lib/axios";
 import { toast } from "sonner";
 
 // Helper function to make the API call to fetch files and folders
-export const getContent = async (folderId: string | null, filters: any) => {
+export const getContent = async (folderId: string | null, filters: any, pagination: { pageIndex: number, pageSize: number }) => {
   try {
     const params = new URLSearchParams();
 
@@ -11,8 +11,8 @@ export const getContent = async (folderId: string | null, filters: any) => {
       params.append('folder_id', folderId);
     }
 
-    params.append('limit', '10')
-    params.append('offset', '0')
+    params.append('limit', String(pagination.pageSize))
+    params.append('offset', String(pagination.pageIndex * pagination.pageSize))
 
     for (const key in filters) {
       if (filters[key]) {

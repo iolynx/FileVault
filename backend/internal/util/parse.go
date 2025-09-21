@@ -2,6 +2,9 @@ package util
 
 import (
 	"strconv"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // parseIntOrDefault attempts to parse a string to an int
@@ -42,4 +45,16 @@ func ParseBoolOrDefault(s string, defaultValue bool) bool {
 		return defaultValue
 	}
 	return val
+}
+
+// toPgTimestamptz converts a pointer to a time.Time value
+// to a pgType.toPgTimestamptz value.
+func ToPgTimestamptz(t *time.Time) pgtype.Timestamptz {
+	if t == nil {
+		return pgtype.Timestamptz{Valid: false}
+	}
+	return pgtype.Timestamptz{
+		Time:  *t,
+		Valid: true,
+	}
 }

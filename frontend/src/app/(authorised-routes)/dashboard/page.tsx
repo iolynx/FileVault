@@ -18,6 +18,9 @@ import { useFileUploader } from "@/hooks/useFileUploader";
 import { MultiSelectOption } from "@/components/multi-select";
 import { mapUsersToOptions } from "@/lib/utils";
 import { User } from "@/types/User";
+import { SortConfig } from "@/types/Sort";
+import { DataTablePagination } from '@/components/DataTablePagination';
+import { useDebounce } from "@/hooks/useDebounce";
 
 const filterOptions: FilterOption[] = [
 	{ value: 'content_type', label: 'MIME Type' },
@@ -27,13 +30,18 @@ const filterOptions: FilterOption[] = [
 ];
 
 const DashboardPage = () => {
-	const router = useRouter();
-	const { contents, path, isLoading, fetchContents } = useContentStore();
+	const { contents, path, isLoading, totalCount, fetchContents } = useContentStore();
+
 	const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
+	const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'uploaded_at', direction: 'desc' });
+	const [pagination, setPagination] = useState({
+		pageIndex: 0,
+		pageSize: 10,
+	});
+
 	const currentFolder = path[path.length - 1];
 	const currentFolderId = currentFolder ? currentFolder.id : null;
 	const [shareDialogOptions, setShareDialogOptions] = useState<MultiSelectOption[]>([]);
-	const [loading, setLoading] = useState(false)
 
 	const fetchUsers = async () => {
 		try {
@@ -89,7 +97,6 @@ const DashboardPage = () => {
 			if (sizeFilter.min_size !== null) {
 				updatedFilters.push({ column: 'min_size', value: String(sizeFilter.min_size) });
 			}
-
 			if (sizeFilter.max_size !== null) {
 				updatedFilters.push({ column: 'max_size', value: String(sizeFilter.max_size) });
 			}
@@ -97,23 +104,31 @@ const DashboardPage = () => {
 			return updatedFilters;
 		});
 	};
+
 	useEffect(() => {
 		const currentFolder = path[path.length - 1];
 
-		// Convert the filters array to an object for the API.
+		// Convert the filters array to an object for the API
 		const filtersObject = activeFilters.reduce((acc, filter) => {
 			acc[filter.column] = filter.value;
 			return acc;
 		}, {} as Record<string, string>);
 
+		// Add sorting to the filters object
+		if (sortConfig) {
+			filtersObject.sort_by = sortConfig.key;
+			filtersObject.sort_order = sortConfig.direction;
+		}
+
 		// Debounce the fetch call
 		const debounceTimer = setTimeout(() => {
-			fetchContents(currentFolder.id, filtersObject);
+			fetchContents(currentFolder.id, filtersObject, pagination);
+			// TODO: move fetchusers to whenever the share modal is opened
 			fetchUsers();
 		}, 750);
 
 		return () => clearTimeout(debounceTimer);
-	}, [path, activeFilters, fetchContents]);
+	}, [path, activeFilters, sortConfig, pagination, fetchContents]);
 
 	const refreshContents = () => {
 		const currentFolder = path[path.length - 1];
@@ -121,7 +136,7 @@ const DashboardPage = () => {
 			acc[filter.column] = filter.value;
 			return acc;
 		}, {} as Record<string, string>);
-		fetchContents(currentFolder.id, filtersObject);
+		fetchContents(currentFolder.id, filtersObject, pagination);
 		fetchUsers();
 	};
 
@@ -132,8 +147,17 @@ const DashboardPage = () => {
 	};
 
 	const { uploadFiles } = useFileUploader({
+		// TODO: just update the state on the frontend instead of fetching again
 		onUploadComplete: refreshContents,
 	})
+
+	const handleSort = (key: string) => {
+		setSortConfig(prevConfig => {
+			// If clicking the same key, toggle direction; otherwise, reset to 'asc'
+			const direction = prevConfig.key === key && prevConfig.direction === 'asc' ? 'desc' : 'asc';
+			return { key, direction };
+		});
+	};
 
 	const { isDragging } = useDragAndDrop({ onDrop: (files) => handleUpload(files) });
 
@@ -154,7 +178,10 @@ const DashboardPage = () => {
 					/>
 				</div>
 				<div className="m-4">
-					<FileUploadMenu onActionComplete={refreshContents} currentFolderID={currentFolderId} />
+					<FileUploadMenu
+						onActionComplete={refreshContents}
+						currentFolderID={currentFolderId}
+					/>
 				</div>
 
 				{isLoading ?
@@ -162,7 +189,20 @@ const DashboardPage = () => {
 					<>
 						<Breadcrumbs />
 						<Card className="rounded-2xl border shadow-sm overflow-hidden w-full max-w-7xl mt-4 pt-1 pb-1">
-							<FilesTable contents={contents} onDataChange={refreshContents} shareDialogOptions={shareDialogOptions} />
+							<FilesTable
+								contents={contents}
+								onDataChange={refreshContents}
+								shareDialogOptions={shareDialogOptions}
+								sortConfig={sortConfig}
+								onSort={handleSort}
+							/>
+							<DataTablePagination
+								pageIndex={pagination.pageIndex}
+								pageSize={pagination.pageSize}
+								setPageSize={(size) => setPagination({ pageIndex: 0, pageSize: size })}
+								setPageIndex={(page) => setPagination(p => ({ ...p, pageIndex: page }))}
+								totalCount={totalCount}
+							/>
 						</Card>
 					</>
 				}

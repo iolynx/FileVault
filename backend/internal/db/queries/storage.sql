@@ -140,95 +140,121 @@ WHERE
 ORDER BY f.uploaded_at DESC
 LIMIT $1 OFFSET $2;
 
+-----------------------------
+
 -- name: ListFolderContents :many
-SELECT 
-    f.id,
-    f.name AS filename,
-    'folder' AS item_type,
-    NULL::bigint AS size,
-    NULL::text AS content_type,
-    f.created_at AS uploaded_at,
-    (f.owner_id = sqlc.arg(user_id)) AS user_owns_file,
-    NULL::bigint AS download_count,
-    NULL::uuid AS folder_id
-FROM folders f
-WHERE 
-    f.owner_id = sqlc.arg(user_id)
-    AND f.parent_folder_id = sqlc.arg(parent_folder_id)::UUID
-    AND (sqlc.arg(search)::TEXT = '' OR f.name ILIKE '%' || sqlc.arg(search)::TEXT || '%')
+WITH folder_contents AS (
+    SELECT 
+        f.id,
+        f.name AS filename,
+        'folder' AS item_type,
+        NULL::bigint AS size,
+        NULL::text AS content_type,
+        f.created_at AS uploaded_at,
+        (f.owner_id = sqlc.arg(user_id)) AS user_owns_file,
+        NULL::bigint AS download_count,
+        NULL::uuid AS folder_id
+    FROM folders f
+    WHERE 
+        f.owner_id = sqlc.arg(user_id)
+        AND f.parent_folder_id = sqlc.arg(parent_folder_id)::UUID
+        AND (sqlc.arg(search)::TEXT = '' OR f.name ILIKE '%' || sqlc.arg(search)::TEXT || '%')
+        AND (sqlc.arg(mime_type)::TEXT = 'folder/folder' OR sqlc.arg(mime_type)::TEXT = '')
 
-UNION ALL
+    UNION ALL
 
-SELECT
-    f.id,
-    f.filename,
-    'file' AS item_type,
-    f.size,
-    f.declared_mime AS content_type,
-    f.uploaded_at,
-    (f.owner_id = sqlc.arg(user_id)) AS user_owns_file,
-    f.download_count,
-    f.folder_id
-FROM files f
-WHERE
-    f.owner_id = sqlc.arg(user_id)
-    AND f.folder_id = sqlc.arg(parent_folder_id)::UUID
-    AND (sqlc.arg(search)::TEXT = '' OR f.filename ILIKE '%' || sqlc.arg(search)::TEXT || '%')
-    AND (sqlc.arg(mime_type)::TEXT = '' OR f.declared_mime = sqlc.arg(mime_type)::TEXT)
-    AND (sqlc.arg(uploaded_after)::TIMESTAMPTZ IS NULL OR f.uploaded_at > sqlc.arg(uploaded_after)::TIMESTAMPTZ)
-    AND (sqlc.arg(uploaded_before)::TIMESTAMPTZ IS NULL OR f.uploaded_at < sqlc.arg(uploaded_before)::TIMESTAMPTZ)
-    AND (sqlc.narg(min_size)::BIGINT IS NULL OR f.size >= sqlc.narg(min_size)::BIGINT)
-    AND (sqlc.narg(max_size)::BIGINT IS NULL OR f.size <= sqlc.narg(max_size)::BIGINT)
-
-ORDER BY item_type DESC, filename ASC; -- Order folders before files
+    SELECT
+        f.id,
+        f.filename,
+        'file' AS item_type,
+        f.size,
+        f.declared_mime AS content_type,
+        f.uploaded_at,
+        (f.owner_id = sqlc.arg(user_id)) AS user_owns_file,
+        f.download_count,
+        f.folder_id
+    FROM files f
+    WHERE
+        f.owner_id = sqlc.arg(user_id)
+        AND f.folder_id = sqlc.arg(parent_folder_id)::UUID
+        AND (sqlc.arg(search)::TEXT = '' OR f.filename ILIKE '%' || sqlc.arg(search)::TEXT || '%')
+        AND (sqlc.arg(mime_type)::TEXT = '' OR f.declared_mime = sqlc.arg(mime_type)::TEXT)
+        AND (sqlc.arg(uploaded_after)::TIMESTAMPTZ IS NULL OR f.uploaded_at > sqlc.arg(uploaded_after)::TIMESTAMPTZ)
+        AND (sqlc.arg(uploaded_before)::TIMESTAMPTZ IS NULL OR f.uploaded_at < sqlc.arg(uploaded_before)::TIMESTAMPTZ)
+        AND (sqlc.narg(min_size)::BIGINT IS NULL OR f.size >= sqlc.narg(min_size)::BIGINT)
+        AND (sqlc.narg(max_size)::BIGINT IS NULL OR f.size <= sqlc.narg(max_size)::BIGINT)
+) 
+SELECT *, COUNT(*) OVER() AS total_count 
+FROM folder_contents
+ORDER BY 
+    item_type DESC,
+    CASE WHEN sqlc.arg(sort_by)::text = 'filename' AND sqlc.arg(sort_order)::text = 'asc' THEN filename END ASC,
+    CASE WHEN sqlc.arg(sort_by)::text = 'filename' AND sqlc.arg(sort_order)::text = 'desc' THEN filename END DESC,
+    CASE WHEN sqlc.arg(sort_by)::text = 'size' AND sqlc.arg(sort_order)::text = 'asc' THEN size END ASC NULLS FIRST,
+    CASE WHEN sqlc.arg(sort_by)::text = 'size' AND sqlc.arg(sort_order)::text = 'desc' THEN size END DESC NULLS LAST,
+    CASE WHEN sqlc.arg(sort_by)::text = 'uploaded_at' AND sqlc.arg(sort_order)::text = 'asc' THEN uploaded_at END ASC,
+    CASE WHEN sqlc.arg(sort_by)::text = 'uploaded_at' AND sqlc.arg(sort_order)::text = 'desc' THEN uploaded_at END DESC
+LIMIT $1 OFFSET $2;
 
 -- name: ListRootContents :many
-SELECT
-    f.id, f.name AS filename, 'folder' AS item_type, NULL::bigint AS size,
-    NULL::text AS content_type, f.created_at AS uploaded_at,
-    (f.owner_id = sqlc.arg(user_id)) AS user_owns_file,
-    NULL::bigint AS download_count, NULL::uuid AS folder_id
-FROM folders f
-WHERE f.owner_id = sqlc.arg(user_id) AND f.parent_folder_id IS NULL
-  AND (sqlc.arg(search)::TEXT = '' OR f.name ILIKE '%' || sqlc.arg(search)::TEXT || '%')
+WITH root_contents AS (
+    SELECT
+        f.id, f.name AS filename, 'folder' AS item_type, NULL::bigint AS size,
+        NULL::text AS content_type, f.created_at AS uploaded_at,
+        (f.owner_id = sqlc.arg(user_id)) AS user_owns_file,
+        NULL::bigint AS download_count, NULL::uuid AS folder_id
+    FROM folders f
+    WHERE f.owner_id = sqlc.arg(user_id) AND f.parent_folder_id IS NULL
+      AND (sqlc.arg(search)::TEXT = '' OR f.name ILIKE '%' || sqlc.arg(search)::TEXT || '%')
+      AND (sqlc.arg(mime_type)::TEXT = 'folder/folder' OR sqlc.arg(mime_type)::TEXT = '')
 
-UNION ALL
+    UNION ALL
 
-SELECT
-    f.id, f.filename, 'file' AS item_type, f.size, f.declared_mime AS content_type,
-    f.uploaded_at, (f.owner_id = sqlc.arg(user_id)) AS user_owns_file,
-    f.download_count, f.folder_id
-FROM files f
-WHERE f.owner_id = sqlc.arg(user_id) AND f.folder_id IS NULL
-    AND (sqlc.arg(search)::TEXT = '' OR f.filename ILIKE '%' || sqlc.arg(search)::TEXT || '%')
-    AND (sqlc.arg(mime_type)::TEXT = '' OR f.declared_mime = sqlc.arg(mime_type)::TEXT)
-    AND (sqlc.arg(uploaded_after)::TIMESTAMPTZ IS NULL OR f.uploaded_at > sqlc.arg(uploaded_after)::TIMESTAMPTZ)
-    AND (sqlc.arg(uploaded_before)::TIMESTAMPTZ IS NULL OR f.uploaded_at < sqlc.arg(uploaded_before)::TIMESTAMPTZ)
-    AND (sqlc.narg(min_size)::BIGINT IS NULL OR f.size >= sqlc.narg(min_size)::BIGINT)
-    AND (sqlc.narg(max_size)::BIGINT IS NULL OR f.size <= sqlc.narg(max_size)::BIGINT)
-    AND (
-        sqlc.arg(ownership_status)::int = 0
-        OR (sqlc.arg(ownership_status)::int = 1 AND f.owner_id = sqlc.arg(user_id))
-        OR (sqlc.arg(ownership_status)::int = 2 AND f.owner_id <> sqlc.arg(user_id))
-      )
+    SELECT
+        f.id, f.filename, 'file' AS item_type, f.size, f.declared_mime AS content_type,
+        f.uploaded_at, (f.owner_id = sqlc.arg(user_id)) AS user_owns_file,
+        f.download_count, f.folder_id
+    FROM files f
+    WHERE f.owner_id = sqlc.arg(user_id) AND f.folder_id IS NULL
+        AND (sqlc.arg(search)::TEXT = '' OR f.filename ILIKE '%' || sqlc.arg(search)::TEXT || '%')
+        AND (sqlc.arg(mime_type)::TEXT = '' OR f.declared_mime = sqlc.arg(mime_type)::TEXT)
+        AND (sqlc.arg(uploaded_after)::TIMESTAMPTZ IS NULL OR f.uploaded_at > sqlc.arg(uploaded_after)::TIMESTAMPTZ)
+        AND (sqlc.arg(uploaded_before)::TIMESTAMPTZ IS NULL OR f.uploaded_at < sqlc.arg(uploaded_before)::TIMESTAMPTZ)
+        AND (sqlc.narg(min_size)::BIGINT IS NULL OR f.size >= sqlc.narg(min_size)::BIGINT)
+        AND (sqlc.narg(max_size)::BIGINT IS NULL OR f.size <= sqlc.narg(max_size)::BIGINT)
+        AND (
+            sqlc.arg(ownership_status)::int = 0
+            OR (sqlc.arg(ownership_status)::int = 1 AND f.owner_id = sqlc.arg(user_id))
+            OR (sqlc.arg(ownership_status)::int = 2 AND f.owner_id <> sqlc.arg(user_id))
+          )
 
-UNION ALL
+    UNION ALL
 
-SELECT
-    f.id, f.filename, 'file' AS item_type, f.size, f.declared_mime AS content_type,
-    f.uploaded_at, (f.owner_id = sqlc.arg(user_id)) AS user_owns_file,
-    f.download_count, NULL::uuid as folder_id
-FROM files f
-JOIN file_shares fs ON f.id = fs.file_id
-WHERE fs.shared_with = sqlc.arg(user_id)
-  AND (sqlc.arg(search)::TEXT = '' OR f.filename ILIKE '%' || sqlc.arg(search)::TEXT || '%')
-  AND (sqlc.arg(mime_type)::TEXT = '' OR f.declared_mime = sqlc.arg(mime_type)::TEXT)
-  AND (sqlc.arg(uploaded_after)::TIMESTAMPTZ IS NULL OR f.uploaded_at > sqlc.arg(uploaded_after)::TIMESTAMPTZ)
-  AND (sqlc.arg(uploaded_before)::TIMESTAMPTZ IS NULL OR f.uploaded_at < sqlc.arg(uploaded_before)::TIMESTAMPTZ)
-  AND (sqlc.narg(min_size)::BIGINT IS NULL OR f.size >= sqlc.narg(min_size)::BIGINT)
-  AND (sqlc.narg(max_size)::BIGINT IS NULL OR f.size <= sqlc.narg(max_size)::BIGINT)
-
-ORDER BY item_type ASC, filename ASC;
+    SELECT
+        f.id, f.filename, 'file' AS item_type, f.size, f.declared_mime AS content_type,
+        f.uploaded_at, (f.owner_id = sqlc.arg(user_id)) AS user_owns_file,
+        f.download_count, NULL::uuid as folder_id
+    FROM files f
+    JOIN file_shares fs ON f.id = fs.file_id
+    WHERE fs.shared_with = sqlc.arg(user_id)
+      AND (sqlc.arg(search)::TEXT = '' OR f.filename ILIKE '%' || sqlc.arg(search)::TEXT || '%')
+      AND (sqlc.arg(mime_type)::TEXT = '' OR f.declared_mime = sqlc.arg(mime_type)::TEXT)
+      AND (sqlc.arg(uploaded_after)::TIMESTAMPTZ IS NULL OR f.uploaded_at > sqlc.arg(uploaded_after)::TIMESTAMPTZ)
+      AND (sqlc.arg(uploaded_before)::TIMESTAMPTZ IS NULL OR f.uploaded_at < sqlc.arg(uploaded_before)::TIMESTAMPTZ)
+      AND (sqlc.narg(min_size)::BIGINT IS NULL OR f.size >= sqlc.narg(min_size)::BIGINT)
+      AND (sqlc.narg(max_size)::BIGINT IS NULL OR f.size <= sqlc.narg(max_size)::BIGINT)
+) 
+SELECT *, COUNT(*) OVER() AS total_count 
+FROM root_contents
+ORDER BY
+    item_type DESC,
+    CASE WHEN sqlc.arg(sort_by)::text = 'filename' AND sqlc.arg(sort_order)::text = 'asc' THEN filename END ASC,
+    CASE WHEN sqlc.arg(sort_by)::text = 'filename' AND sqlc.arg(sort_order)::text = 'desc' THEN filename END DESC,
+    CASE WHEN sqlc.arg(sort_by)::text = 'size' AND sqlc.arg(sort_order)::text = 'asc' THEN size END ASC NULLS FIRST,
+    CASE WHEN sqlc.arg(sort_by)::text = 'size' AND sqlc.arg(sort_order)::text = 'desc' THEN size END DESC NULLS LAST,
+    CASE WHEN sqlc.arg(sort_by)::text = 'uploaded_at' AND sqlc.arg(sort_order)::text = 'asc' THEN uploaded_at END ASC,
+    CASE WHEN sqlc.arg(sort_by)::text = 'uploaded_at' AND sqlc.arg(sort_order)::text = 'desc' THEN uploaded_at END DESC
+LIMIT $1 OFFSET $2;
 
 -- name: IncrementUserStorage :exec
 UPDATE users
@@ -268,12 +294,33 @@ SELECT
     f.uploaded_at,
     f.download_count,
     f.owner_id,
-    u.email as owner_email
+    u.email as owner_email,
+    COUNT(*) OVER() AS total_count
 FROM
     files f
 JOIN
-    users u ON f.owner_id = u.id
-ORDER BY
-    f.uploaded_at DESC
+    users u ON f.owner_id = u.id 
+ORDER BY 
+    CASE WHEN sqlc.arg(sort_order)::text = 'asc' THEN
+        CASE sqlc.arg(sort_by)::text
+            WHEN 'filename' THEN f.filename::text
+            WHEN 'owner_email' THEN u.email::text
+            -- Pad numbers to ensure correct alphabetical sorting
+            WHEN 'size' THEN LPAD(f.size::text, 20, '0')
+            WHEN 'download_count' THEN LPAD(f.download_count::text, 20, '0')
+            -- Timestamps in ISO format sort correctly as text
+            WHEN 'uploaded_at' THEN f.uploaded_at::text
+            ELSE f.uploaded_at::text
+        END
+    END ASC,
+    CASE WHEN sqlc.arg(sort_order)::text = 'desc' THEN
+        CASE sqlc.arg(sort_by)::text
+            WHEN 'filename' THEN f.filename::text
+            WHEN 'owner_email' THEN u.email::text
+            WHEN 'size' THEN LPAD(f.size::text, 20, '0')
+            WHEN 'download_count' THEN LPAD(f.download_count::text, 20, '0')
+            WHEN 'uploaded_at' THEN f.uploaded_at::text
+            ELSE f.uploaded_at::text
+        END
+    END DESC 
 LIMIT $1 OFFSET $2;
-

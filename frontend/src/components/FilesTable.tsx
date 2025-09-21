@@ -1,22 +1,26 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { File } from "@/types/File"
-import { formatBytes } from "@/lib/utils";
+import { cn, formatBytes } from "@/lib/utils";
 import { getFileIcon } from "./FileIcon";
 import { ContentItem } from "@/types/Content";
-import { FolderIcon } from "lucide-react";
+import { ArrowDown, ArrowUp, FolderIcon, FolderOpen } from "lucide-react";
 import FileActionsDropdown from "./FileActionsDropdown";
 import { useContentStore } from "@/stores/useContentStore";
-import { useEffect } from "react";
 import FolderActionsDropdown from "./FolderActionsDropdown";
 import { MultiSelectOption } from "./multi-select";
+import { SortConfig } from "@/types/Sort";
+import { SortableHeader } from "@/components/SortableHeader";
+
 
 interface FilesTableProps {
 	contents: ContentItem[];
 	onDataChange: () => void;
 	shareDialogOptions: MultiSelectOption[];
+	sortConfig: SortConfig;
+	onSort: (key: string) => void;
 }
 
-export default function FilesTable({ contents, onDataChange, shareDialogOptions }: FilesTableProps) {
+export default function FilesTable({ contents, onDataChange, shareDialogOptions, sortConfig, onSort }: FilesTableProps) {
 	const { navigateToFolder } = useContentStore();
 
 	const handleRowClick = (item: ContentItem) => {
@@ -32,10 +36,17 @@ export default function FilesTable({ contents, onDataChange, shareDialogOptions 
 			<Table>
 				<TableHeader>
 					<TableRow>
-						<TableHead className="px-4 w-[100%]">Name</TableHead>
+						<SortableHeader columnKey="filename" sortConfig={sortConfig} onSort={onSort} className="px-4 w-[100%]">
+							Name
+						</SortableHeader>
+
 						<TableHead>Location</TableHead>
-						<TableHead>Size</TableHead>
-						<TableHead>Uploaded On</TableHead>
+						<SortableHeader columnKey="size" sortConfig={sortConfig} onSort={onSort}>
+							Size
+						</SortableHeader>
+						<SortableHeader columnKey="uploaded_at" sortConfig={sortConfig} onSort={onSort}>
+							Uploaded On
+						</SortableHeader>
 						<TableHead className="w-0.5 pl-0 ml-0"></TableHead>
 					</TableRow>
 				</TableHeader>
@@ -49,12 +60,15 @@ export default function FilesTable({ contents, onDataChange, shareDialogOptions 
 						<TableRow
 							key={index}
 							onClick={() => handleRowClick(contentItem)}
-							className="hover:bg-gray-900 group"
+							className={
+								cn({
+									"group cursor-pointer": contentItem.item_type === "folder"
+								})}
 						>
 							<TableCell className="flex flex-row gap-x-2 px-4 pt-4">
 								{contentItem.item_type === "file"
 									? (getFileIcon(contentItem.content_type || ""))
-									: (<FolderIcon />)
+									: (<FolderIcon fill="grey" strokeOpacity={0.3} />)
 								}
 								{contentItem.filename}
 							</TableCell>

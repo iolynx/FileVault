@@ -3,6 +3,7 @@ import { getContent } from '@/lib/contentService';
 import { toast } from 'sonner';
 
 import { ContentItem } from '@/types/Content';
+import { retry } from '@/lib/retry';
 
 interface PathSegment {
 	id: string | null; // null for root (home) path
@@ -12,8 +13,9 @@ interface PathSegment {
 interface ContentState {
 	path: PathSegment[];
 	contents: ContentItem[];
+	totalCount: number;
 	isLoading: boolean;
-	fetchContents: (folderId: string | null, filters: any) => Promise<void>;
+	fetchContents: (folderId: string | null, filters: any, pagination: { pageIndex: number, pageSize: number }) => Promise<void>;
 	navigateToFolder: (folder: { id: string; filename: string }) => void;
 	navigateToPathIndex: (index: number) => void;
 	renameItem: (itemId: string, updatedItem: ContentItem) => void;
@@ -31,22 +33,31 @@ export const useContentStore = create<ContentState>((set, get) => ({
 	path: [{ id: null, name: 'Home' }],
 	contents: [],
 	isLoading: false,
+	totalCount: 0,
 
 	// --- ACTIONS ---
 
 	// Fetches content for the current folder
-	fetchContents: async (folderId, filters) => {
+	// and assigns totalCount 
+	fetchContents: async (folderId, filters, pagination) => {
 		set({ isLoading: true });
 		try {
-			const newContents = await getContent(folderId, filters);
-			set({ contents: newContents, isLoading: false });
+			const fetcher = () => getContent(folderId, filters, pagination)
+
+			const response = await retry(fetcher, {
+				retries: 3,
+				initialDelay: 1500,
+				shouldRetry: (error: any) => error.response?.status === 429,
+			})
+
+			set({
+				contents: response.data,
+				totalCount: response.totalCount,
+				isLoading: false
+			});
 		} catch (error: any) {
-			if (error.response.status === 429) {
-				console.log("Too many requests");
-			} else {
-				toast.error("Failed to fetch files and folders");
-				console.error("Failed to fetch contents", error);
-			}
+			toast.error("Failed to fetch files and folders");
+			console.error("Failed to fetch contents after retries", error);
 			set({ isLoading: false });
 		}
 	},
@@ -79,6 +90,7 @@ export const useContentStore = create<ContentState>((set, get) => ({
 		set({ path: newPath });
 	},
 
+	// Resets to initial state
 	reset: () => {
 		set(initialState);
 	}

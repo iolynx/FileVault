@@ -424,19 +424,43 @@ SELECT
     f.uploaded_at,
     f.download_count,
     f.owner_id,
-    u.email as owner_email
+    u.email as owner_email,
+    COUNT(*) OVER() AS total_count
 FROM
     files f
 JOIN
-    users u ON f.owner_id = u.id
-ORDER BY
-    f.uploaded_at DESC
+    users u ON f.owner_id = u.id 
+ORDER BY 
+    CASE WHEN $3::text = 'asc' THEN
+        CASE $4::text
+            WHEN 'filename' THEN f.filename::text
+            WHEN 'owner_email' THEN u.email::text
+            -- Pad numbers to ensure correct alphabetical sorting
+            WHEN 'size' THEN LPAD(f.size::text, 20, '0')
+            WHEN 'download_count' THEN LPAD(f.download_count::text, 20, '0')
+            -- Timestamps in ISO format sort correctly as text
+            WHEN 'uploaded_at' THEN f.uploaded_at::text
+            ELSE f.uploaded_at::text
+        END
+    END ASC,
+    CASE WHEN $3::text = 'desc' THEN
+        CASE $4::text
+            WHEN 'filename' THEN f.filename::text
+            WHEN 'owner_email' THEN u.email::text
+            WHEN 'size' THEN LPAD(f.size::text, 20, '0')
+            WHEN 'download_count' THEN LPAD(f.download_count::text, 20, '0')
+            WHEN 'uploaded_at' THEN f.uploaded_at::text
+            ELSE f.uploaded_at::text
+        END
+    END DESC 
 LIMIT $1 OFFSET $2
 `
 
 type ListAllFilesParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	Limit     int32  `json:"limit"`
+	Offset    int32  `json:"offset"`
+	SortOrder string `json:"sort_order"`
+	SortBy    string `json:"sort_by"`
 }
 
 type ListAllFilesRow struct {
@@ -448,10 +472,16 @@ type ListAllFilesRow struct {
 	DownloadCount sql.NullInt64      `json:"download_count"`
 	OwnerID       int64              `json:"owner_id"`
 	OwnerEmail    string             `json:"owner_email"`
+	TotalCount    int64              `json:"total_count"`
 }
 
 func (q *Queries) ListAllFiles(ctx context.Context, arg ListAllFilesParams) ([]ListAllFilesRow, error) {
-	rows, err := q.db.Query(ctx, listAllFiles, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, listAllFiles,
+		arg.Limit,
+		arg.Offset,
+		arg.SortOrder,
+		arg.SortBy,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -468,6 +498,7 @@ func (q *Queries) ListAllFiles(ctx context.Context, arg ListAllFilesParams) ([]L
 			&i.DownloadCount,
 			&i.OwnerID,
 			&i.OwnerEmail,
+			&i.TotalCount,
 		); err != nil {
 			return nil, err
 		}
@@ -676,49 +707,66 @@ func (q *Queries) ListFilesSharedWithUser(ctx context.Context, arg ListFilesShar
 }
 
 const listFolderContents = `-- name: ListFolderContents :many
-SELECT 
-    f.id,
-    f.name AS filename,
-    'folder' AS item_type,
-    NULL::bigint AS size,
-    NULL::text AS content_type,
-    f.created_at AS uploaded_at,
-    (f.owner_id = $1) AS user_owns_file,
-    NULL::bigint AS download_count,
-    NULL::uuid AS folder_id
-FROM folders f
-WHERE 
-    f.owner_id = $1
-    AND f.parent_folder_id = $2::UUID
-    AND ($3::TEXT = '' OR f.name ILIKE '%' || $3::TEXT || '%')
 
-UNION ALL
+WITH folder_contents AS (
+    SELECT 
+        f.id,
+        f.name AS filename,
+        'folder' AS item_type,
+        NULL::bigint AS size,
+        NULL::text AS content_type,
+        f.created_at AS uploaded_at,
+        (f.owner_id = $5) AS user_owns_file,
+        NULL::bigint AS download_count,
+        NULL::uuid AS folder_id
+    FROM folders f
+    WHERE 
+        f.owner_id = $5
+        AND f.parent_folder_id = $6::UUID
+        AND ($7::TEXT = '' OR f.name ILIKE '%' || $7::TEXT || '%')
+        AND ($8::TEXT = 'folder/folder' OR $8::TEXT = '')
 
-SELECT
-    f.id,
-    f.filename,
-    'file' AS item_type,
-    f.size,
-    f.declared_mime AS content_type,
-    f.uploaded_at,
-    (f.owner_id = $1) AS user_owns_file,
-    f.download_count,
-    f.folder_id
-FROM files f
-WHERE
-    f.owner_id = $1
-    AND f.folder_id = $2::UUID
-    AND ($3::TEXT = '' OR f.filename ILIKE '%' || $3::TEXT || '%')
-    AND ($4::TEXT = '' OR f.declared_mime = $4::TEXT)
-    AND ($5::TIMESTAMPTZ IS NULL OR f.uploaded_at > $5::TIMESTAMPTZ)
-    AND ($6::TIMESTAMPTZ IS NULL OR f.uploaded_at < $6::TIMESTAMPTZ)
-    AND ($7::BIGINT IS NULL OR f.size >= $7::BIGINT)
-    AND ($8::BIGINT IS NULL OR f.size <= $8::BIGINT)
+    UNION ALL
 
-ORDER BY item_type DESC, filename ASC
+    SELECT
+        f.id,
+        f.filename,
+        'file' AS item_type,
+        f.size,
+        f.declared_mime AS content_type,
+        f.uploaded_at,
+        (f.owner_id = $5) AS user_owns_file,
+        f.download_count,
+        f.folder_id
+    FROM files f
+    WHERE
+        f.owner_id = $5
+        AND f.folder_id = $6::UUID
+        AND ($7::TEXT = '' OR f.filename ILIKE '%' || $7::TEXT || '%')
+        AND ($8::TEXT = '' OR f.declared_mime = $8::TEXT)
+        AND ($9::TIMESTAMPTZ IS NULL OR f.uploaded_at > $9::TIMESTAMPTZ)
+        AND ($10::TIMESTAMPTZ IS NULL OR f.uploaded_at < $10::TIMESTAMPTZ)
+        AND ($11::BIGINT IS NULL OR f.size >= $11::BIGINT)
+        AND ($12::BIGINT IS NULL OR f.size <= $12::BIGINT)
+) 
+SELECT id, filename, item_type, size, content_type, uploaded_at, user_owns_file, download_count, folder_id, COUNT(*) OVER() AS total_count 
+FROM folder_contents
+ORDER BY 
+    item_type DESC,
+    CASE WHEN $3::text = 'filename' AND $4::text = 'asc' THEN filename END ASC,
+    CASE WHEN $3::text = 'filename' AND $4::text = 'desc' THEN filename END DESC,
+    CASE WHEN $3::text = 'size' AND $4::text = 'asc' THEN size END ASC NULLS FIRST,
+    CASE WHEN $3::text = 'size' AND $4::text = 'desc' THEN size END DESC NULLS LAST,
+    CASE WHEN $3::text = 'uploaded_at' AND $4::text = 'asc' THEN uploaded_at END ASC,
+    CASE WHEN $3::text = 'uploaded_at' AND $4::text = 'desc' THEN uploaded_at END DESC
+LIMIT $1 OFFSET $2
 `
 
 type ListFolderContentsParams struct {
+	Limit          int32              `json:"limit"`
+	Offset         int32              `json:"offset"`
+	SortBy         string             `json:"sort_by"`
+	SortOrder      string             `json:"sort_order"`
 	UserID         int64              `json:"user_id"`
 	ParentFolderID uuid.UUID          `json:"parent_folder_id"`
 	Search         string             `json:"search"`
@@ -739,10 +787,16 @@ type ListFolderContentsRow struct {
 	UserOwnsFile  bool               `json:"user_owns_file"`
 	DownloadCount sql.NullInt64      `json:"download_count"`
 	FolderID      pgtype.UUID        `json:"folder_id"`
+	TotalCount    int64              `json:"total_count"`
 }
 
+// ---------------------------
 func (q *Queries) ListFolderContents(ctx context.Context, arg ListFolderContentsParams) ([]ListFolderContentsRow, error) {
 	rows, err := q.db.Query(ctx, listFolderContents,
+		arg.Limit,
+		arg.Offset,
+		arg.SortBy,
+		arg.SortOrder,
 		arg.UserID,
 		arg.ParentFolderID,
 		arg.Search,
@@ -769,6 +823,7 @@ func (q *Queries) ListFolderContents(ctx context.Context, arg ListFolderContents
 			&i.UserOwnsFile,
 			&i.DownloadCount,
 			&i.FolderID,
+			&i.TotalCount,
 		); err != nil {
 			return nil, err
 		}
@@ -781,56 +836,71 @@ func (q *Queries) ListFolderContents(ctx context.Context, arg ListFolderContents
 }
 
 const listRootContents = `-- name: ListRootContents :many
+WITH root_contents AS (
+    SELECT
+        f.id, f.name AS filename, 'folder' AS item_type, NULL::bigint AS size,
+        NULL::text AS content_type, f.created_at AS uploaded_at,
+        (f.owner_id = $5) AS user_owns_file,
+        NULL::bigint AS download_count, NULL::uuid AS folder_id
+    FROM folders f
+    WHERE f.owner_id = $5 AND f.parent_folder_id IS NULL
+      AND ($6::TEXT = '' OR f.name ILIKE '%' || $6::TEXT || '%')
+      AND ($7::TEXT = 'folder/folder' OR $7::TEXT = '')
 
-SELECT
-    f.id, f.name AS filename, 'folder' AS item_type, NULL::bigint AS size,
-    NULL::text AS content_type, f.created_at AS uploaded_at,
-    (f.owner_id = $1) AS user_owns_file,
-    NULL::bigint AS download_count, NULL::uuid AS folder_id
-FROM folders f
-WHERE f.owner_id = $1 AND f.parent_folder_id IS NULL
-  AND ($2::TEXT = '' OR f.name ILIKE '%' || $2::TEXT || '%')
+    UNION ALL
 
-UNION ALL
+    SELECT
+        f.id, f.filename, 'file' AS item_type, f.size, f.declared_mime AS content_type,
+        f.uploaded_at, (f.owner_id = $5) AS user_owns_file,
+        f.download_count, f.folder_id
+    FROM files f
+    WHERE f.owner_id = $5 AND f.folder_id IS NULL
+        AND ($6::TEXT = '' OR f.filename ILIKE '%' || $6::TEXT || '%')
+        AND ($7::TEXT = '' OR f.declared_mime = $7::TEXT)
+        AND ($8::TIMESTAMPTZ IS NULL OR f.uploaded_at > $8::TIMESTAMPTZ)
+        AND ($9::TIMESTAMPTZ IS NULL OR f.uploaded_at < $9::TIMESTAMPTZ)
+        AND ($10::BIGINT IS NULL OR f.size >= $10::BIGINT)
+        AND ($11::BIGINT IS NULL OR f.size <= $11::BIGINT)
+        AND (
+            $12::int = 0
+            OR ($12::int = 1 AND f.owner_id = $5)
+            OR ($12::int = 2 AND f.owner_id <> $5)
+          )
 
-SELECT
-    f.id, f.filename, 'file' AS item_type, f.size, f.declared_mime AS content_type,
-    f.uploaded_at, (f.owner_id = $1) AS user_owns_file,
-    f.download_count, f.folder_id
-FROM files f
-WHERE f.owner_id = $1 AND f.folder_id IS NULL
-    AND ($2::TEXT = '' OR f.filename ILIKE '%' || $2::TEXT || '%')
-    AND ($3::TEXT = '' OR f.declared_mime = $3::TEXT)
-    AND ($4::TIMESTAMPTZ IS NULL OR f.uploaded_at > $4::TIMESTAMPTZ)
-    AND ($5::TIMESTAMPTZ IS NULL OR f.uploaded_at < $5::TIMESTAMPTZ)
-    AND ($6::BIGINT IS NULL OR f.size >= $6::BIGINT)
-    AND ($7::BIGINT IS NULL OR f.size <= $7::BIGINT)
-    AND (
-        $8::int = 0
-        OR ($8::int = 1 AND f.owner_id = $1)
-        OR ($8::int = 2 AND f.owner_id <> $1)
-      )
+    UNION ALL
 
-UNION ALL
-
-SELECT
-    f.id, f.filename, 'file' AS item_type, f.size, f.declared_mime AS content_type,
-    f.uploaded_at, (f.owner_id = $1) AS user_owns_file,
-    f.download_count, NULL::uuid as folder_id
-FROM files f
-JOIN file_shares fs ON f.id = fs.file_id
-WHERE fs.shared_with = $1
-  AND ($2::TEXT = '' OR f.filename ILIKE '%' || $2::TEXT || '%')
-  AND ($3::TEXT = '' OR f.declared_mime = $3::TEXT)
-  AND ($4::TIMESTAMPTZ IS NULL OR f.uploaded_at > $4::TIMESTAMPTZ)
-  AND ($5::TIMESTAMPTZ IS NULL OR f.uploaded_at < $5::TIMESTAMPTZ)
-  AND ($6::BIGINT IS NULL OR f.size >= $6::BIGINT)
-  AND ($7::BIGINT IS NULL OR f.size <= $7::BIGINT)
-
-ORDER BY item_type ASC, filename ASC
+    SELECT
+        f.id, f.filename, 'file' AS item_type, f.size, f.declared_mime AS content_type,
+        f.uploaded_at, (f.owner_id = $5) AS user_owns_file,
+        f.download_count, NULL::uuid as folder_id
+    FROM files f
+    JOIN file_shares fs ON f.id = fs.file_id
+    WHERE fs.shared_with = $5
+      AND ($6::TEXT = '' OR f.filename ILIKE '%' || $6::TEXT || '%')
+      AND ($7::TEXT = '' OR f.declared_mime = $7::TEXT)
+      AND ($8::TIMESTAMPTZ IS NULL OR f.uploaded_at > $8::TIMESTAMPTZ)
+      AND ($9::TIMESTAMPTZ IS NULL OR f.uploaded_at < $9::TIMESTAMPTZ)
+      AND ($10::BIGINT IS NULL OR f.size >= $10::BIGINT)
+      AND ($11::BIGINT IS NULL OR f.size <= $11::BIGINT)
+) 
+SELECT id, filename, item_type, size, content_type, uploaded_at, user_owns_file, download_count, folder_id, COUNT(*) OVER() AS total_count 
+FROM root_contents
+ORDER BY
+    item_type DESC,
+    CASE WHEN $3::text = 'filename' AND $4::text = 'asc' THEN filename END ASC,
+    CASE WHEN $3::text = 'filename' AND $4::text = 'desc' THEN filename END DESC,
+    CASE WHEN $3::text = 'size' AND $4::text = 'asc' THEN size END ASC NULLS FIRST,
+    CASE WHEN $3::text = 'size' AND $4::text = 'desc' THEN size END DESC NULLS LAST,
+    CASE WHEN $3::text = 'uploaded_at' AND $4::text = 'asc' THEN uploaded_at END ASC,
+    CASE WHEN $3::text = 'uploaded_at' AND $4::text = 'desc' THEN uploaded_at END DESC
+LIMIT $1 OFFSET $2
 `
 
 type ListRootContentsParams struct {
+	Limit           int32              `json:"limit"`
+	Offset          int32              `json:"offset"`
+	SortBy          string             `json:"sort_by"`
+	SortOrder       string             `json:"sort_order"`
 	UserID          int64              `json:"user_id"`
 	Search          string             `json:"search"`
 	MimeType        string             `json:"mime_type"`
@@ -851,11 +921,15 @@ type ListRootContentsRow struct {
 	UserOwnsFile  bool               `json:"user_owns_file"`
 	DownloadCount sql.NullInt64      `json:"download_count"`
 	FolderID      pgtype.UUID        `json:"folder_id"`
+	TotalCount    int64              `json:"total_count"`
 }
 
-// Order folders before files
 func (q *Queries) ListRootContents(ctx context.Context, arg ListRootContentsParams) ([]ListRootContentsRow, error) {
 	rows, err := q.db.Query(ctx, listRootContents,
+		arg.Limit,
+		arg.Offset,
+		arg.SortBy,
+		arg.SortOrder,
 		arg.UserID,
 		arg.Search,
 		arg.MimeType,
@@ -882,6 +956,7 @@ func (q *Queries) ListRootContents(ctx context.Context, arg ListRootContentsPara
 			&i.UserOwnsFile,
 			&i.DownloadCount,
 			&i.FolderID,
+			&i.TotalCount,
 		); err != nil {
 			return nil, err
 		}

@@ -31,6 +31,7 @@ func NewServer(
 ) *Server {
 	r := chi.NewRouter()
 
+	// TODO: move corsoptions to env vars
 	corsOptions := cors.New(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:3000"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
@@ -39,7 +40,6 @@ func NewServer(
 		MaxAge:           86400,
 	})
 
-	// TODO: add cors to middleware
 	r.Use(corsOptions.Handler)
 
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {

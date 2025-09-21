@@ -475,64 +475,96 @@ type ListContentsRequest struct {
 	Offset          int32         `json:"offset"`
 	MinSize         sql.NullInt64 `json:"min_size"`
 	MaxSize         sql.NullInt64 `json:"max_size"`
+	SortBy          string        `json:"sort_by"`
+	SortOrder       string        `json:"sort_order"`
 }
 
-func (s *Service) ListContents(ctx context.Context, req ListContentsRequest) ([]ContentItem, error) {
+type ListContentsResponse struct {
+	Data       []ContentItem `json:"data"`
+	TotalCount int64         `json:"totalCount"`
+}
+
+func (s *Service) ListContents(ctx context.Context, req ListContentsRequest) (ListContentsResponse, error) {
 	userID, ok := userctx.GetUserID(ctx)
 	if !ok {
-		return nil, apierror.NewUnauthorizedError()
+		return ListContentsResponse{}, apierror.NewUnauthorizedError()
 	}
 	var items []ContentItem
-	var err error
+	var totalCount int64
 
-	log.Printf("Retrieving contents of folder: %s", req.FolderID)
+	log.Printf("Retrieving contents of folder: %v, with sort: %s %s", req.FolderID, req.SortBy, req.SortOrder)
 
 	if req.FolderID != nil {
-		parentFolder, err := s.repo.queries.GetFolderByID(ctx, *req.FolderID)
-		log.Printf("Parent folder: %s", parentFolder.Name)
+		// --- Handle Listing a Specific Folder ---
+		folder, err := s.repo.GetFolderByID(ctx, *req.FolderID)
 		if err != nil {
-			return nil, apierror.NewNotFoundError("Folder")
+			return ListContentsResponse{}, apierror.NewNotFoundError("Folder")
 		}
-		if parentFolder.OwnerID != userID {
-			return nil, apierror.NewForbiddenError()
+		if folder.OwnerID != userID {
+			return ListContentsResponse{}, apierror.NewForbiddenError()
 		}
 
 		params := sqlc.ListFolderContentsParams{
 			UserID:         userID,
+			MimeType:       req.MimeType,
 			ParentFolderID: *req.FolderID,
 			Search:         req.Search,
-			MimeType:       req.MimeType,
-			UploadedAfter:  util.TimeToTimestamptz(req.UploadedAfter),
-			UploadedBefore: util.TimeToTimestamptz(req.UploadedBefore),
 			MinSize:        req.MinSize,
 			MaxSize:        req.MaxSize,
+			SortBy:         req.SortBy,
+			SortOrder:      req.SortOrder,
+			Limit:          req.Limit,
+			Offset:         req.Offset,
+			UploadedAfter:  util.ToPgTimestamptz(req.UploadedAfter),
+			UploadedBefore: util.ToPgTimestamptz(req.UploadedBefore),
 		}
 		rows, repoErr := s.repo.ListFolderContents(ctx, params)
-		err = repoErr
+		if repoErr != nil {
+			return ListContentsResponse{}, repoErr
+		}
+
+		if len(rows) > 0 {
+			totalCount = rows[0].TotalCount
+		}
 		items = mapListFolderContentsRows(rows)
+
 	} else {
+		// --- Handle Listing the Root Folder ---
 		params := sqlc.ListRootContentsParams{
 			UserID:          userID,
-			Search:          req.Search,
 			MimeType:        req.MimeType,
-			UploadedAfter:   util.TimeToTimestamptz(req.UploadedAfter),
-			UploadedBefore:  util.TimeToTimestamptz(req.UploadedBefore),
+			Search:          req.Search,
 			OwnershipStatus: req.OwnershipStatus,
 			MinSize:         req.MinSize,
 			MaxSize:         req.MaxSize,
+			SortBy:          req.SortBy,
+			SortOrder:       req.SortOrder,
+			Limit:           req.Limit,
+			Offset:          req.Offset,
+			UploadedAfter:   util.ToPgTimestamptz(req.UploadedAfter),
+			UploadedBefore:  util.ToPgTimestamptz(req.UploadedBefore),
 		}
 		rows, repoErr := s.repo.ListRootContents(ctx, params)
-		err = repoErr
+		if repoErr != nil {
+			return ListContentsResponse{}, repoErr
+		}
+
+		if len(rows) > 0 {
+			totalCount = rows[0].TotalCount
+		}
 		items = mapListRootContentsRows(rows)
 	}
 
-	if err != nil {
-		return nil, err
+	response := ListContentsResponse{
+		Data:       items,
+		TotalCount: totalCount,
 	}
 
-	return items, nil
+	return response, nil
 }
 
+// Helper function to map the generated sqlc rows to ContentItem,
+// which is the standardized way to represent Content (files / folders)
 func mapListFolderContentsRows(rows []sqlc.ListFolderContentsRow) []ContentItem {
 	items := make([]ContentItem, len(rows))
 	for i, r := range rows {
@@ -558,6 +590,8 @@ func mapListFolderContentsRows(rows []sqlc.ListFolderContentsRow) []ContentItem 
 	return items
 }
 
+// Helper function to map the generated sqlc rows to ContentItem,
+// which is the standardized way to represent Content (files / folders)
 func mapListRootContentsRows(rows []sqlc.ListRootContentsRow) []ContentItem {
 	items := make([]ContentItem, len(rows))
 	for i, r := range rows {
@@ -588,9 +622,11 @@ func (s *Service) IncrementDownloadCount(ctx context.Context, fileID uuid.UUID) 
 	return s.repo.IncrementDownloadCount(ctx, fileID)
 }
 
-func (s *Service) ListAllFiles(ctx context.Context, limit, offset int32) ([]sqlc.ListAllFilesRow, error) {
+func (s *Service) ListAllFiles(ctx context.Context, limit, offset int32, sortBy, sortOrder string) ([]sqlc.ListAllFilesRow, error) {
 	return s.repo.ListAllFiles(ctx, sqlc.ListAllFilesParams{
-		Limit:  limit,
-		Offset: offset,
+		Limit:     limit,
+		Offset:    offset,
+		SortBy:    sortBy,
+		SortOrder: sortOrder,
 	})
 }

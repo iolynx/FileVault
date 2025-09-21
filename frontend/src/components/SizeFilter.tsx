@@ -19,12 +19,14 @@ import {
 	Select,
 	SelectContent,
 	SelectItem,
+	SelectLabel,
 	SelectTrigger,
 	SelectValue,
 } from '@/components/ui/select';
 import { SizeRange } from '@/types/Size';
 import { ChevronDown, X, XIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { SelectGroup } from '@radix-ui/react-select';
 
 const UNIT_MULTIPLIERS = { BYTES: 1, KB: 1024, MB: 1024 ** 2, GB: 1024 ** 3 };
 type Unit = keyof typeof UNIT_MULTIPLIERS;
@@ -81,7 +83,9 @@ export function SizeFilter({ ranges, onApplyFilter }: SizeFilterProps) {
 					</Button>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent className="w-56">
-					<DropdownMenuLabel>Filter by size</DropdownMenuLabel>
+					<SelectGroup>
+						<SelectLabel>Filter by Size</SelectLabel>
+					</SelectGroup>
 					<DropdownMenuSeparator />
 					<DropdownMenuRadioGroup value={activeLabel || ''} onValueChange={handleRangeSelect}>
 						{ranges.map((range) => (

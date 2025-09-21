@@ -40,9 +40,9 @@ type Querier interface {
 	ListFilesByOwner(ctx context.Context, arg ListFilesByOwnerParams) ([]ListFilesByOwnerRow, error)
 	ListFilesForUser(ctx context.Context, arg ListFilesForUserParams) ([]ListFilesForUserRow, error)
 	ListFilesSharedWithUser(ctx context.Context, arg ListFilesSharedWithUserParams) ([]File, error)
+	//---------------------------
 	ListFolderContents(ctx context.Context, arg ListFolderContentsParams) ([]ListFolderContentsRow, error)
 	ListOtherUsers(ctx context.Context, id int64) ([]ListOtherUsersRow, error)
-	// Order folders before files
 	ListRootContents(ctx context.Context, arg ListRootContentsParams) ([]ListRootContentsRow, error)
 	ListUsersWithAccessToFile(ctx context.Context, fileID uuid.UUID) ([]ListUsersWithAccessToFileRow, error)
 	UpdateBlobRefcount(ctx context.Context, arg UpdateBlobRefcountParams) error

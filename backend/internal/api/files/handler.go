@@ -168,6 +168,25 @@ func (h *FileHandler) ListContents(w http.ResponseWriter, r *http.Request) error
 		}
 	}
 
+	sortBy := r.URL.Query().Get("sort_by")
+	sortOrder := r.URL.Query().Get("sort_order")
+
+	// whitelisting columns to prevent users from sorting by arbitrary/unindexed columns
+	allowedSortColumns := map[string]bool{
+		"filename":    true,
+		"size":        true,
+		"uploaded_at": true,
+	}
+	if !allowedSortColumns[sortBy] {
+		sortBy = "uploaded_at" // Default sort column
+	}
+	if sortOrder != "asc" && sortOrder != "desc" {
+		sortOrder = "desc"
+	}
+	log.Printf("Sorting with SortBy: %s, SortOrder: %s", sortBy, sortOrder)
+	req.SortBy = sortBy
+	req.SortOrder = sortOrder
+
 	contents, err := h.service.ListContents(r.Context(), req)
 	if err != nil {
 		log.Printf("Error while trying to retrieve contents: %s", err)
@@ -268,14 +287,70 @@ func (h *FileHandler) UnshareFile(w http.ResponseWriter, r *http.Request) error 
 	return util.WriteJSON(w, http.StatusOK, map[string]string{"message": "Unshared file successfully"})
 }
 
+type ListAllFilesResponse struct {
+	ID            string    `json:"id"`
+	Filename      string    `json:"filename"`
+	Size          int64     `json:"size"`
+	DeclaredMime  string    `json:"declared_mime"`
+	UploadedAt    time.Time `json:"uploaded_at"`
+	DownloadCount *int64    `json:"download_count,omitempty"`
+	OwnerID       int64     `json:"owner_id"`
+	OwnerEmail    string    `json:"owner_email"`
+}
+
+type PaginatedFilesResponse struct {
+	Data       []ListAllFilesResponse `json:"data"`
+	TotalCount int64                  `json:"totalCount"`
+}
+
 func (h *FileHandler) ListAllFiles(w http.ResponseWriter, r *http.Request) error {
 	limit := util.ParseInt32OrDefault(r.URL.Query().Get("limit"), 50)
 	offset := util.ParseInt32OrDefault(r.URL.Query().Get("offset"), 0)
 
-	files, err := h.service.ListAllFiles(r.Context(), limit, offset)
+	sortBy := r.URL.Query().Get("sort_by")
+	sortOrder := r.URL.Query().Get("sort_order")
+
+	// whitelisting columns to prevent users from sorting by arbitrary/unindexed columns
+	allowedSortColumns := map[string]bool{
+		"filename":    true,
+		"size":        true,
+		"uploaded_at": true,
+	}
+	if !allowedSortColumns[sortBy] {
+		sortBy = "uploaded_at" // Default sort column
+	}
+	if sortOrder != "asc" && sortOrder != "desc" {
+		sortOrder = "desc"
+	}
+	log.Printf("Sorting with SortBy: %s, SortOrder: %s", sortBy, sortOrder)
+
+	fileRows, err := h.service.ListAllFiles(r.Context(), limit, offset, sortBy, sortOrder)
 	if err != nil {
 		return apierror.NewInternalServerError("Failed to list all files")
 	}
 
-	return util.WriteJSON(w, http.StatusOK, files)
+	files := make([]ListAllFilesResponse, 0, len(fileRows))
+	for _, r := range fileRows {
+		files = append(files, ListAllFilesResponse{
+			ID:            r.ID.String(),
+			Filename:      r.Filename,
+			Size:          r.Size,
+			DeclaredMime:  r.DeclaredMime.String,
+			UploadedAt:    r.UploadedAt.Time,
+			DownloadCount: &r.DownloadCount.Int64,
+		})
+	}
+
+	totalCount := int64(0)
+	if len(files) > 0 {
+		totalCount = fileRows[0].TotalCount
+	}
+
+	response := PaginatedFilesResponse{
+		Data:       files,
+		TotalCount: totalCount,
+	}
+
+	return util.WriteJSON(w, http.StatusOK, response)
+
 }

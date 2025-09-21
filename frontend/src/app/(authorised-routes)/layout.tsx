@@ -28,14 +28,6 @@ const AuthorizedLayout = async ({ children }: { children: ReactNode }) => {
                   <Link href="/dashboard">Dashboard</Link>
                 </NavigationMenuLink>
               </NavigationMenuItem>
-              <NavigationMenuItem>
-                <NavigationMenuLink
-                  asChild
-                  className={navigationMenuTriggerStyle()}
-                >
-                  <Link href="/storage">Storage</Link>
-                </NavigationMenuLink>
-              </NavigationMenuItem>
 
               {/*Admin only Page */}
               {user?.role === 'admin' && (

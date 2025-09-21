@@ -9,18 +9,20 @@ import { Button } from "./ui/button";
 import { DatePicker } from "./DatePicker";
 import { ArrowRightIcon } from "lucide-react";
 import { SizeFilter } from "./SizeFilter";
+import { mimeTypeOptions } from "@/types/MimeTypes";
 
 const locationOptions = [
 	{ value: '0', label: 'All Locations' },
 	{ value: '1', label: 'Your Vault' },
 	{ value: '2', label: 'Shared with You' },
 ]
-const mimeTypeOptions = [
-	{ value: 'image/jpeg', label: 'JPEG Image' },
-	{ value: 'application/pdf', label: 'PDF Document' },
-	{ value: 'text/plain', label: 'Text File' },
-	{ value: 'image/png', label: 'PNG Image' },
-];
+
+// const mimeTypeOptions = [
+// 	{ value: 'image/jpeg', label: 'JPEG Image' },
+// 	{ value: 'application/pdf', label: 'PDF Document' },
+// 	{ value: 'text/plain', label: 'Text File' },
+// 	{ value: 'image/png', label: 'PNG Image' },
+// ];
 
 const PREDEFINED_RANGES = [
 	{ label: 'Tiny (< 1 MB)', minBytes: 0, maxBytes: 1048576 },
@@ -37,7 +39,6 @@ interface SearchAndFilterProps {
 
 export function SearchAndFilterComponent({ activeFilters, onFilterChange, onSizeFilterChange }: SearchAndFilterProps) {
 	// Helper function to get the current value for any filter
-	console.log(activeFilters)
 	const getActiveValue = (column: string) =>
 		activeFilters.find((f) => f.column === column)?.value || '';
 
@@ -66,12 +67,14 @@ export function SearchAndFilterComponent({ activeFilters, onFilterChange, onSize
 					options={locationOptions}
 					value={getActiveValue('user_owns_file')}
 					onChange={(newValue) => onFilterChange('user_owns_file', newValue)}
+					type="Location"
 				/>
 				<FilterSelect
 					placeholder="File Type"
 					options={mimeTypeOptions}
 					value={getActiveValue('content_type')}
 					onChange={(newValue) => onFilterChange('content_type', newValue)}
+					type="Filetype"
 				/>
 
 				<SizeFilter
