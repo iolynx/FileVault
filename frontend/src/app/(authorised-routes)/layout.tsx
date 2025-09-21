@@ -1,5 +1,5 @@
 import { ModeToggle } from "@/components/mode-toggle";
-import { Link } from "@radix-ui/react-navigation-menu";
+import Link from "next/link";
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -36,6 +36,18 @@ const AuthorizedLayout = async ({ children }: { children: ReactNode }) => {
                   <Link href="/storage">Storage</Link>
                 </NavigationMenuLink>
               </NavigationMenuItem>
+
+              {/*Admin only Page */}
+              {user?.role === 'admin' && (
+                <NavigationMenuItem>
+                  <Link href="/admin" passHref>
+                    <NavigationMenuLink className={navigationMenuTriggerStyle()}>
+                      Admin Panel
+                    </NavigationMenuLink>
+                  </Link>
+                </NavigationMenuItem>
+              )}
+
             </NavigationMenuList>
           </NavigationMenu>
         </nav>

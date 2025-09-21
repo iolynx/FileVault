@@ -3,7 +3,6 @@ import { getContent } from '@/lib/contentService';
 import { toast } from 'sonner';
 
 import { ContentItem } from '@/types/Content';
-import api from '@/lib/axios';
 
 interface PathSegment {
 	id: string | null; // null for root (home) path
@@ -41,9 +40,13 @@ export const useContentStore = create<ContentState>((set, get) => ({
 		try {
 			const newContents = await getContent(folderId, filters);
 			set({ contents: newContents, isLoading: false });
-		} catch (error) {
-			toast.error("Failed to fetch files and folders");
-			console.error("Failed to fetch contents", error);
+		} catch (error: any) {
+			if (error.response.status === 429) {
+				console.log("Too many requests");
+			} else {
+				toast.error("Failed to fetch files and folders");
+				console.error("Failed to fetch contents", error);
+			}
 			set({ isLoading: false });
 		}
 	},

@@ -4,17 +4,21 @@
 
 
 (FEAT)
-- add folders
-	- move file
 - check mimetype
-- file tags
-- sort files table
+- move files and folders
+- sort files table (frontend)
 - admin panel (show all files, all download counts)
+- show user card with actual storage quota
+
 - move all folders up in search results
 - password strength
 - audit logs
 - chron job to check storage from time to time
-- deleting folders kills files
+- file tags
+
+(BUG)
+- fix getCurrentUser bug so it only fetches when you open the modal
+
 
 (MISC)
 - fix log statements with %v

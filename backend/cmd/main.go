@@ -12,8 +12,8 @@ import (
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/users"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/config"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db/sqlc"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/storage"
-	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -26,6 +26,8 @@ func main() {
 	// Initialize DB
 	pool := db.Connect(cfg.Database.URL)
 	defer pool.Close()
+
+	dbRepo := sqlc.New(pool)
 
 	// Initialize Minio, Storage Handler
 	store, err := storage.NewMinioStorage(cfg.Minio)
@@ -46,21 +48,21 @@ func main() {
 	log.Println("Connected to Redis")
 
 	// Initialize Users Repository, Service, Handler
-	userRepo := users.NewRepository(pool)
+	userRepo := users.NewRepository(dbRepo)
 	userService := users.NewService(userRepo, os.Getenv("JWT_SECRET"), cfg)
 	userHandler := users.NewHandler(userService)
 
 	// Initialize Files Repository, Service, Handler
-	fileRepo := files.NewRepository(pool)
+	fileRepo := files.NewRepository(dbRepo)
 	fileService := files.NewService(fileRepo, store)
 	fileHandler := files.NewFileHandler(fileService)
 
 	// Initialize Folders Repository, Service, Handler
-	folderRepo := folders.NewRepository(pool)
-	folderService := folders.NewService(folderRepo)
+	folderRepo := folders.NewRepository(dbRepo)
+	folderService := folders.NewService(folderRepo, store)
 	folderHandler := folders.NewHandler(folderService)
 
-	server := api.NewServer(userHandler, fileHandler, folderHandler, redisClient, cfg)
+	server := api.NewServer(cfg, userHandler, fileHandler, folderHandler, redisClient, dbRepo)
 
 	log.Println("server listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", server.Router))

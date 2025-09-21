@@ -53,7 +53,7 @@ export default function FilesTable({ contents, onDataChange, shareDialogOptions 
 						>
 							<TableCell className="flex flex-row gap-x-2 px-4 pt-4">
 								{contentItem.item_type === "file"
-									? (getFileIcon(contentItem.content_type))
+									? (getFileIcon(contentItem.content_type || ""))
 									: (<FolderIcon />)
 								}
 								{contentItem.filename}

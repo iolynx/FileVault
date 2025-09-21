@@ -79,8 +79,6 @@ export default function FileActionsDropdown({ file, onFileChange, shareDialogOpt
 		} catch (error: any) {
 			console.log('Error while deleting file: ', error);
 			toast.error(error.response.data.message);
-		} finally {
-			//onFileChange();
 		}
 	}
 
@@ -121,8 +119,6 @@ export default function FileActionsDropdown({ file, onFileChange, shareDialogOpt
 			toast.success(`Renamed file to ${res.data.filename}`);
 		} catch (error: any) {
 			toast.error(error.response.data.message)
-		} finally {
-			//onFileChange();
 		}
 	}
 

@@ -8,18 +8,27 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/cors"
 
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/apphandler"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/files"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/folders"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/middleware"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/users"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/config"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db/sqlc"
 )
 
 type Server struct {
 	Router *chi.Mux
 }
 
-func NewServer(userHandler *users.Handler, fileHandler *files.FileHandler, folderHandler *folders.Handler, redisClient *redis.Client, cfg *config.Config) *Server {
+func NewServer(
+	cfg *config.Config,
+	userHandler *users.Handler,
+	fileHandler *files.FileHandler,
+	folderHandler *folders.Handler,
+	redisClient *redis.Client,
+	repo *sqlc.Queries,
+) *Server {
 	r := chi.NewRouter()
 
 	corsOptions := cors.New(cors.Options{
@@ -56,5 +65,12 @@ func NewServer(userHandler *users.Handler, fileHandler *files.FileHandler, folde
 		userHandler.RegisterRoutes(r)
 	})
 
+	// Admin Routes
+	r.Route("/admin", func(r chi.Router) {
+		r.Use(middleware.AuthMiddleware(cfg.Server.JWTSecret))
+		r.Use(middleware.AdminMiddleware(repo))
+
+		r.Get("/files", apphandler.MakeHTTPHandler(fileHandler.ListAllFiles))
+	})
 	return &Server{Router: r}
 }

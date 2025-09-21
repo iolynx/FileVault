@@ -7,16 +7,15 @@ import (
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/util"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Repository struct {
 	queries *sqlc.Queries
 }
 
-func NewRepository(pool *pgxpool.Pool) *Repository {
+func NewRepository(db *sqlc.Queries) *Repository {
 	return &Repository{
-		queries: sqlc.New(pool),
+		queries: db,
 	}
 }
 
@@ -150,4 +149,8 @@ func (r *Repository) IncrementDownloadCount(ctx context.Context, fileID uuid.UUI
 
 func (r *Repository) GetFolderByID(ctx context.Context, folderID uuid.UUID) (sqlc.Folder, error) {
 	return r.queries.GetFolderByID(ctx, folderID)
+}
+
+func (r *Repository) ListAllFiles(ctx context.Context, arg sqlc.ListAllFilesParams) ([]sqlc.ListAllFilesRow, error) {
+	return r.queries.ListAllFiles(ctx, arg)
 }

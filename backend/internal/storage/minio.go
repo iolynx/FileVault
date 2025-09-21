@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"time"
@@ -87,4 +88,32 @@ func (m *MinioStorage) GetBlob(ctx context.Context, fileName string) (io.ReadClo
 
 func (m *MinioStorage) DeleteBlob(ctx context.Context, fileName string) error {
 	return m.Client.RemoveObject(ctx, m.BucketName, fileName, minio.RemoveObjectOptions{})
+}
+
+func (m *MinioStorage) DeleteBlobs(ctx context.Context, storagePaths []string) error {
+	if len(storagePaths) == 0 {
+		return nil // nothing to delete
+	}
+
+	objectsCh := make(chan minio.ObjectInfo)
+
+	// Goroutine to send object names
+	go func() {
+		defer close(objectsCh)
+		for _, key := range storagePaths {
+			objectsCh <- minio.ObjectInfo{Key: key}
+		}
+	}()
+
+	errorCh := m.Client.RemoveObjects(ctx, m.BucketName, objectsCh, minio.RemoveObjectsOptions{})
+
+	// Check for errors from the delete operation
+	for e := range errorCh {
+		if e.Err != nil {
+			log.Printf("Error deleting object %s: %v", e.ObjectName, e.Err)
+			return fmt.Errorf("failed to delete one or more objects from storage")
+		}
+	}
+
+	return nil
 }

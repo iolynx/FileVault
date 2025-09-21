@@ -267,3 +267,15 @@ func (h *FileHandler) UnshareFile(w http.ResponseWriter, r *http.Request) error 
 
 	return util.WriteJSON(w, http.StatusOK, map[string]string{"message": "Unshared file successfully"})
 }
+
+func (h *FileHandler) ListAllFiles(w http.ResponseWriter, r *http.Request) error {
+	limit := util.ParseInt32OrDefault(r.URL.Query().Get("limit"), 50)
+	offset := util.ParseInt32OrDefault(r.URL.Query().Get("offset"), 0)
+
+	files, err := h.service.ListAllFiles(r.Context(), limit, offset)
+	if err != nil {
+		return apierror.NewInternalServerError("Failed to list all files")
+	}
+
+	return util.WriteJSON(w, http.StatusOK, files)
+}

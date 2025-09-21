@@ -163,6 +163,16 @@ func (q *Queries) DeleteBlobIfUnused(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const deleteBlobsByStoragePaths = `-- name: DeleteBlobsByStoragePaths :exec
+DELETE FROM blobs
+WHERE storage_path = ANY($1::text[]) AND refcount <= 1
+`
+
+func (q *Queries) DeleteBlobsByStoragePaths(ctx context.Context, storagePaths []string) error {
+	_, err := q.db.Exec(ctx, deleteBlobsByStoragePaths, storagePaths)
+	return err
+}
+
 const deleteFile = `-- name: DeleteFile :exec
 DELETE FROM files
 WHERE id = $1
@@ -208,7 +218,7 @@ func (q *Queries) GetBlobByID(ctx context.Context, id uuid.UUID) (Blob, error) {
 }
 
 const getBlobBySha = `-- name: GetBlobBySha :one
-SELECT id, sha256, storage_path, size, mime_type, refcount, created_at FROM blobs WHERE sha256 = $1
+SELECT id, sha256, storage_path, size, mime_type, refcount, created_at FROM blobs WHERE sha256 = $1 LIMIT 1
 `
 
 func (q *Queries) GetBlobBySha(ctx context.Context, sha256 string) (Blob, error) {
@@ -330,6 +340,39 @@ func (q *Queries) GetFilesForUserCount(ctx context.Context, arg GetFilesForUserC
 	return count, err
 }
 
+const getObjectKeysInFolderHierarchy = `-- name: GetObjectKeysInFolderHierarchy :many
+WITH RECURSIVE folder_hierarchy AS (
+    SELECT fo.id FROM folders fo WHERE fo.id = $1
+    UNION ALL
+    SELECT f.id FROM folders f
+    INNER JOIN folder_hierarchy fh ON f.parent_folder_id = fh.id
+)
+SELECT b.storage_path
+FROM files f
+JOIN blobs b ON f.blob_id = b.id
+WHERE f.folder_id IN (SELECT id FROM folder_hierarchy)
+`
+
+func (q *Queries) GetObjectKeysInFolderHierarchy(ctx context.Context, id uuid.UUID) ([]string, error) {
+	rows, err := q.db.Query(ctx, getObjectKeysInFolderHierarchy, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var storage_path string
+		if err := rows.Scan(&storage_path); err != nil {
+			return nil, err
+		}
+		items = append(items, storage_path)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const incrementBlobRefcount = `-- name: IncrementBlobRefcount :one
 UPDATE blobs SET refcount = refcount + 1
 WHERE id = $1
@@ -370,6 +413,70 @@ type IncrementUserStorageParams struct {
 func (q *Queries) IncrementUserStorage(ctx context.Context, arg IncrementUserStorageParams) error {
 	_, err := q.db.Exec(ctx, incrementUserStorage, arg.ID, arg.OriginalStorageBytes, arg.DedupStorageBytes)
 	return err
+}
+
+const listAllFiles = `-- name: ListAllFiles :many
+SELECT
+    f.id,
+    f.filename,
+    f.size,
+    f.declared_mime,
+    f.uploaded_at,
+    f.download_count,
+    f.owner_id,
+    u.email as owner_email
+FROM
+    files f
+JOIN
+    users u ON f.owner_id = u.id
+ORDER BY
+    f.uploaded_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type ListAllFilesParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+type ListAllFilesRow struct {
+	ID            uuid.UUID          `json:"id"`
+	Filename      string             `json:"filename"`
+	Size          int64              `json:"size"`
+	DeclaredMime  pgtype.Text        `json:"declared_mime"`
+	UploadedAt    pgtype.Timestamptz `json:"uploaded_at"`
+	DownloadCount sql.NullInt64      `json:"download_count"`
+	OwnerID       int64              `json:"owner_id"`
+	OwnerEmail    string             `json:"owner_email"`
+}
+
+func (q *Queries) ListAllFiles(ctx context.Context, arg ListAllFilesParams) ([]ListAllFilesRow, error) {
+	rows, err := q.db.Query(ctx, listAllFiles, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAllFilesRow{}
+	for rows.Next() {
+		var i ListAllFilesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Filename,
+			&i.Size,
+			&i.DeclaredMime,
+			&i.UploadedAt,
+			&i.DownloadCount,
+			&i.OwnerID,
+			&i.OwnerEmail,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listFilesByOwner = `-- name: ListFilesByOwner :many
@@ -608,7 +715,7 @@ WHERE
     AND ($7::BIGINT IS NULL OR f.size >= $7::BIGINT)
     AND ($8::BIGINT IS NULL OR f.size <= $8::BIGINT)
 
-ORDER BY item_type ASC, filename ASC
+ORDER BY item_type DESC, filename ASC
 `
 
 type ListFolderContentsParams struct {

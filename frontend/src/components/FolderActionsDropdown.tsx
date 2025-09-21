@@ -27,21 +27,20 @@ export default function FolderActionsDropdown({ folder, onFolderChange }: Action
 	const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false)
 	const [isRenameDialogOpen, setRenameDialogOpen] = useState(false)
 	const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+	const { deleteItem, renameItem } = useContentStore();
 
 	const handleDelete = async () => {
 		try {
 			const res = await api.delete(`/folders/${folder.id}`, { withCredentials: true });
 			if (res.status === 204) {
 				toast.success("Deleted folder successfully");
-				onFolderChange();
+				deleteItem(folder.id)
 			} else {
 				toast.error(res.data.error);
 			}
 		} catch (error: any) {
-			console.log('Error while deleting file: ', error);
+			console.log('Error while deleting folder: ', error);
 			toast.error(error.response.data.message);
-		} finally {
-			onFolderChange();
 		}
 	}
 
@@ -55,11 +54,10 @@ export default function FolderActionsDropdown({ folder, onFolderChange }: Action
 				{ name: newFolderName },
 				{ headers: { "Content-Type": "application/json" }, withCredentials: true }
 			)
-			toast.success(`Renamed folder to ${res.data.name}`);
+			renameItem(folder.id, res.data);
+			toast.success(`Renamed folder to ${res.data.filename}`);
 		} catch (error: any) {
 			toast.error(error.response.data.error)
-		} finally {
-			onFolderChange();
 		}
 	}
 

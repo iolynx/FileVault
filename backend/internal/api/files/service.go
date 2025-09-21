@@ -19,6 +19,7 @@ import (
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/userctx"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/util"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -60,7 +61,7 @@ func NewService(repo *Repository, storage storage.Storage) *Service {
 }
 
 func (s *Service) UploadFile(ctx context.Context, file multipart.File, header *multipart.FileHeader, folderID *uuid.UUID) (sqlc.File, error) {
-	// Compute hash (sha256)
+	// Ownership check
 	ownerID, ok := userctx.GetUserID(ctx)
 	if !ok {
 		return sqlc.File{}, apierror.NewUnauthorizedError()
@@ -69,13 +70,14 @@ func (s *Service) UploadFile(ctx context.Context, file multipart.File, header *m
 	if folderID != nil {
 		folder, err := s.repo.GetFolderByID(ctx, *folderID)
 		if err != nil {
-			return sqlc.File{}, apierror.NewNotFoundError("Folder not found")
+			return sqlc.File{}, apierror.NewNotFoundError("Folder")
 		}
 		if folder.OwnerID != ownerID {
 			return sqlc.File{}, apierror.NewForbiddenError()
 		}
 	}
 
+	// Compute hash (sha256)
 	hasher := sha256.New()
 	buf, err := io.ReadAll(io.TeeReader(file, hasher))
 	if err != nil {
@@ -85,6 +87,10 @@ func (s *Service) UploadFile(ctx context.Context, file multipart.File, header *m
 
 	// Check if blob exists
 	blob, err := s.repo.GetBlobBySha(ctx, sha)
+	if err != nil && err != pgx.ErrNoRows {
+		return sqlc.File{}, apierror.NewInternalServerError("Failed to check for existing blob")
+	}
+
 	if err == nil {
 		// Existing blob: update refcount
 		log.Print("blob already exists, updating refcount")
@@ -92,7 +98,7 @@ func (s *Service) UploadFile(ctx context.Context, file multipart.File, header *m
 			return sqlc.File{}, err
 		}
 
-		// Update Storage Value for User
+		// Update Original Storage value for User (without deduplication)
 		err = s.repo.IncrementUserStorage(ctx, ownerID, int(blob.Size), 0)
 		if err != nil {
 			return sqlc.File{}, err
@@ -112,13 +118,15 @@ func (s *Service) UploadFile(ctx context.Context, file multipart.File, header *m
 		log.Println("creating with these params:")
 		log.Print(params)
 		return s.repo.CreateFile(ctx, params)
+	} else {
+
 	}
 
 	// New blob: upload to storage with this objectKey after checking storage quota
 	// Get this user's storage quota
 	user, err := s.repo.queries.GetUserByID(ctx, ownerID)
 	if err != nil {
-		return sqlc.File{}, apierror.NewInternalServerError("Could not retriee internal data")
+		return sqlc.File{}, apierror.NewInternalServerError("Could not retrieve internal data")
 	}
 	// Get this blob's size, return HTTP 413 "Payload Too Large" used for StorageQuota errors
 	newBlobSize := int64(len(buf))
@@ -141,11 +149,10 @@ func (s *Service) UploadFile(ctx context.Context, file multipart.File, header *m
 	}
 	log.Print("Created Blob record in db")
 
-	// Update storage value for user
+	// Update Original & Deduplicated storage value for user
 	s.repo.IncrementUserStorage(ctx, ownerID, int(newBlob.Size), int(newBlob.Size))
 
 	// Create file record referencing blob
-
 	params := sqlc.CreateFileParams{
 		OwnerID:      ownerID,
 		BlobID:       newBlob.ID,
@@ -406,7 +413,7 @@ func (s *Service) RemoveFileShare(ctx context.Context, fileID uuid.UUID, sharedW
 
 	file, err := s.repo.GetFileByUUID(ctx, fileID)
 	if err != nil {
-		return apierror.NewNotFoundError("File not found")
+		return apierror.NewNotFoundError("File")
 	}
 
 	if file.OwnerID != ownerID {
@@ -484,7 +491,7 @@ func (s *Service) ListContents(ctx context.Context, req ListContentsRequest) ([]
 		parentFolder, err := s.repo.queries.GetFolderByID(ctx, *req.FolderID)
 		log.Printf("Parent folder: %s", parentFolder.Name)
 		if err != nil {
-			return nil, apierror.NewNotFoundError("Folder not found")
+			return nil, apierror.NewNotFoundError("Folder")
 		}
 		if parentFolder.OwnerID != userID {
 			return nil, apierror.NewForbiddenError()
@@ -579,4 +586,11 @@ func mapListRootContentsRows(rows []sqlc.ListRootContentsRow) []ContentItem {
 
 func (s *Service) IncrementDownloadCount(ctx context.Context, fileID uuid.UUID) error {
 	return s.repo.IncrementDownloadCount(ctx, fileID)
+}
+
+func (s *Service) ListAllFiles(ctx context.Context, limit, offset int32) ([]sqlc.ListAllFilesRow, error) {
+	return s.repo.ListAllFiles(ctx, sqlc.ListAllFilesParams{
+		Limit:  limit,
+		Offset: offset,
+	})
 }

@@ -8,7 +8,7 @@ DELETE FROM blobs
 WHERE id = $1;
 
 -- name: GetBlobBySha :one
-SELECT * FROM blobs WHERE sha256 = $1;
+SELECT * FROM blobs WHERE sha256 = $1 LIMIT 1;
 
 -- name: GetBlobByID :one
 SELECT * FROM blobs WHERE id = $1;
@@ -31,6 +31,10 @@ RETURNING refcount;
 
 -- name: DeleteBlobIfUnused :exec
 DELETE FROM blobs WHERE id = $1 AND refcount <= 0;
+
+-- name: DeleteBlobsByStoragePaths :exec
+DELETE FROM blobs
+WHERE storage_path = ANY(sqlc.arg(storage_paths)::text[]) AND refcount <= 1;
 
 
 
@@ -176,7 +180,7 @@ WHERE
     AND (sqlc.narg(min_size)::BIGINT IS NULL OR f.size >= sqlc.narg(min_size)::BIGINT)
     AND (sqlc.narg(max_size)::BIGINT IS NULL OR f.size <= sqlc.narg(max_size)::BIGINT)
 
-ORDER BY item_type ASC, filename ASC; -- Order folders before files
+ORDER BY item_type DESC, filename ASC; -- Order folders before files
 
 -- name: ListRootContents :many
 SELECT
@@ -242,3 +246,34 @@ WHERE id = $1;
 UPDATE files
 SET download_count = download_count + 1
 WHERE id = $1;
+
+-- name: GetObjectKeysInFolderHierarchy :many
+WITH RECURSIVE folder_hierarchy AS (
+    SELECT fo.id FROM folders fo WHERE fo.id = $1
+    UNION ALL
+    SELECT f.id FROM folders f
+    INNER JOIN folder_hierarchy fh ON f.parent_folder_id = fh.id
+)
+SELECT b.storage_path
+FROM files f
+JOIN blobs b ON f.blob_id = b.id
+WHERE f.folder_id IN (SELECT id FROM folder_hierarchy);
+
+-- name: ListAllFiles :many
+SELECT
+    f.id,
+    f.filename,
+    f.size,
+    f.declared_mime,
+    f.uploaded_at,
+    f.download_count,
+    f.owner_id,
+    u.email as owner_email
+FROM
+    files f
+JOIN
+    users u ON f.owner_id = u.id
+ORDER BY
+    f.uploaded_at DESC
+LIMIT $1 OFFSET $2;
+

@@ -5,16 +5,15 @@ import (
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db/sqlc"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Repository struct {
 	queries *sqlc.Queries
 }
 
-func NewRepository(pool *pgxpool.Pool) *Repository {
+func NewRepository(db *sqlc.Queries) *Repository {
 	return &Repository{
-		queries: sqlc.New(pool),
+		queries: db,
 	}
 }
 
@@ -26,10 +25,14 @@ func (r *Repository) GetFolderByID(ctx context.Context, folderID uuid.UUID) (sql
 	return r.queries.GetFolderByID(ctx, folderID)
 }
 
-func (r *Repository) UpdateFolder(ctx context.Context, arg sqlc.UpdateFolderParams) (sqlc.Folder, error) {
+func (r *Repository) UpdateFolder(ctx context.Context, arg sqlc.UpdateFolderParams) (sqlc.UpdateFolderRow, error) {
 	return r.queries.UpdateFolder(ctx, arg)
 }
 
 func (r *Repository) DeleteFolder(ctx context.Context, folderID uuid.UUID) error {
 	return r.queries.DeleteFolder(ctx, folderID)
+}
+
+func (r *Repository) GetObjectKeysInFolderHierarchy(ctx context.Context, folderID uuid.UUID) ([]string, error) {
+	return r.queries.GetObjectKeysInFolderHierarchy(ctx, folderID)
 }

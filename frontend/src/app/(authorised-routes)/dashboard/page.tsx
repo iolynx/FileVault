@@ -42,7 +42,10 @@ const DashboardPage = () => {
 			)
 			const users: User[] = await res.data
 			setShareDialogOptions(mapUsersToOptions(users));
-		} catch (error) {
+		} catch (error: any) {
+			if (error.response.status == 429) {
+				console.log("Too many requests");
+			}
 			console.log("error while fetching users:", error)
 		}
 	}

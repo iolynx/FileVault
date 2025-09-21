@@ -18,7 +18,7 @@ SET
     parent_folder_id = $3
 WHERE 
     id = $1
-RETURNING *;
+RETURNING id, name as filename, owner_id, parent_folder_id, created_at;
 
 -- name: DeleteFolder :exec
 DELETE FROM folders

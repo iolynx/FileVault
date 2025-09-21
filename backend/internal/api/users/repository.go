@@ -5,16 +5,15 @@ import (
 	"errors"
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db/sqlc"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Repository struct {
 	queries *sqlc.Queries
 }
 
-func NewRepository(pool *pgxpool.Pool) *Repository {
+func NewRepository(db *sqlc.Queries) *Repository {
 	return &Repository{
-		queries: sqlc.New(pool),
+		queries: db,
 	}
 }
 

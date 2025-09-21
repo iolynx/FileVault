@@ -76,7 +76,7 @@ SET
     parent_folder_id = $3
 WHERE 
     id = $1
-RETURNING id, name, owner_id, parent_folder_id, created_at
+RETURNING id, name as filename, owner_id, parent_folder_id, created_at
 `
 
 type UpdateFolderParams struct {
@@ -85,12 +85,20 @@ type UpdateFolderParams struct {
 	ParentFolderID pgtype.UUID `json:"parent_folder_id"`
 }
 
-func (q *Queries) UpdateFolder(ctx context.Context, arg UpdateFolderParams) (Folder, error) {
+type UpdateFolderRow struct {
+	ID             uuid.UUID          `json:"id"`
+	Filename       string             `json:"filename"`
+	OwnerID        int64              `json:"owner_id"`
+	ParentFolderID pgtype.UUID        `json:"parent_folder_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) UpdateFolder(ctx context.Context, arg UpdateFolderParams) (UpdateFolderRow, error) {
 	row := q.db.QueryRow(ctx, updateFolder, arg.ID, arg.Name, arg.ParentFolderID)
-	var i Folder
+	var i UpdateFolderRow
 	err := row.Scan(
 		&i.ID,
-		&i.Name,
+		&i.Filename,
 		&i.OwnerID,
 		&i.ParentFolderID,
 		&i.CreatedAt,

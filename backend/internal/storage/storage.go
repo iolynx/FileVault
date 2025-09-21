@@ -10,4 +10,5 @@ type Storage interface {
 	GetBlob(ctx context.Context, fileName string) (io.ReadCloser, error)
 	GetBlobURL(ctx context.Context, fileName string) (string, error)
 	DeleteBlob(ctx context.Context, fileName string) error
+	DeleteBlobs(ctx context.Context, storagePaths []string) error
 }
