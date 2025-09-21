@@ -76,7 +76,7 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) error {
 		_, err = h.service.UploadFile(r.Context(), file, header, folderID)
 		if err != nil {
 			log.Printf("Upload failed for file %s: %v", header.Filename, err)
-			return apierror.NewInternalServerError("Upload failed for one or more files")
+			return err
 		}
 	}
 

@@ -18,6 +18,7 @@ const mimeTypeOptions = [
 	{ value: 'image/jpeg', label: 'JPEG Image' },
 	{ value: 'application/pdf', label: 'PDF Document' },
 	{ value: 'text/plain', label: 'Text File' },
+	{ value: 'image/png', label: 'PNG Image' },
 ];
 
 interface SearchAndFilterProps {

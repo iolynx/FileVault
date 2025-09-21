@@ -25,11 +25,9 @@ interface FileUploadMenuProps {
 export function FileUploadMenu({ onActionComplete, currentFolderID }: FileUploadMenuProps) {
 	const inputRef = useRef<HTMLInputElement>(null);
 
-	const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 	const [isFolderModalOpen, setFolderModalOpen] = useState(false);
 	const [newFolderName, setNewFolderName] = useState('');
 	const [isCreating, setIsCreating] = useState(false);
-	const toastIdRef = useRef<string | number>(null);
 
 	const { uploadFiles } = useFileUploader({
 		onUploadComplete: onActionComplete,

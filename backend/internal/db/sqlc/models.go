@@ -58,4 +58,5 @@ type User struct {
 	CreatedAt            pgtype.Timestamp `json:"created_at"`
 	OriginalStorageBytes int64            `json:"original_storage_bytes"`
 	DedupStorageBytes    int64            `json:"dedup_storage_bytes"`
+	StorageQuota         int64            `json:"storage_quota"`
 }

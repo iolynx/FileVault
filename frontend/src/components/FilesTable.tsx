@@ -8,13 +8,15 @@ import FileActionsDropdown from "./FileActionsDropdown";
 import { useContentStore } from "@/stores/useContentStore";
 import { useEffect } from "react";
 import FolderActionsDropdown from "./FolderActionsDropdown";
+import { MultiSelectOption } from "./multi-select";
 
 interface FilesTableProps {
 	contents: ContentItem[];
 	onDataChange: () => void;
+	shareDialogOptions: MultiSelectOption[];
 }
 
-export default function FilesTable({ contents, onDataChange }: FilesTableProps) {
+export default function FilesTable({ contents, onDataChange, shareDialogOptions }: FilesTableProps) {
 	const { navigateToFolder } = useContentStore();
 
 	const handleRowClick = (item: ContentItem) => {
@@ -75,6 +77,7 @@ export default function FilesTable({ contents, onDataChange }: FilesTableProps) 
 										<FileActionsDropdown
 											file={contentItem}
 											onFileChange={onDataChange}
+											shareDialogOptions={shareDialogOptions}
 										/>
 									) : (
 										<FolderActionsDropdown

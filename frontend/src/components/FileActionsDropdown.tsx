@@ -20,32 +20,22 @@ import { MultiSelectOption } from "./multi-select";
 import { ShareDialogModal } from "@/components/ShareDialogModal";
 import { ContentItem } from "@/types/Content";
 import { InfoModal } from "@/components/InfoModal";
+import { useContentStore } from "@/stores/useContentStore";
 
 interface ActionsDropDownProps {
 	file: ContentItem;
 	onFileChange: () => void;
+	shareDialogOptions: MultiSelectOption[];
 }
 
-export default function FileActionsDropdown({ file, onFileChange }: ActionsDropDownProps) {
+export default function FileActionsDropdown({ file, onFileChange, shareDialogOptions }: ActionsDropDownProps) {
 	const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false)
 	const [isRenameDialogOpen, setRenameDialogOpen] = useState(false)
 	const [isShareDialogOpen, setShareDialogOpen] = useState(false)
-	const [shareDialogOptions, setShareDialogOptions] = useState<MultiSelectOption[]>([]);
 	const [shareDialogDefautValue, setShareDialogDefaultValue] = useState<string[]>([]);
 	const [shareDialogURL, setShareDialogURL] = useState<string>("");
 	const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
-
-	const fetchUsers = async () => {
-		try {
-			const res = await api.get("/users",
-				{ withCredentials: true },
-			)
-			const users: User[] = await res.data
-			setShareDialogOptions(mapUsersToOptions(users));
-		} catch (error) {
-			console.log("error while fetching users:", error)
-		}
-	}
+	const { renameItem, deleteItem } = useContentStore();
 
 	const fetchUsersWithAccessToFile = async () => {
 		try {
@@ -71,10 +61,9 @@ export default function FileActionsDropdown({ file, onFileChange }: ActionsDropD
 		}
 	}
 	useEffect(() => {
-		fetchUsers()
-		if (file.user_owns_file && file.item_type === 'file') {
-			fetchUsersWithAccessToFile()
-			fetchFileURL()
+		if (file.user_owns_file && file.item_type === 'file' && isShareDialogOpen) {
+			fetchUsersWithAccessToFile();
+			fetchFileURL();
 		}
 	}, [isShareDialogOpen])
 
@@ -83,7 +72,7 @@ export default function FileActionsDropdown({ file, onFileChange }: ActionsDropD
 			const res = await api.delete(`/files/${file.id}`, { withCredentials: true });
 			if (res.status === 204) {
 				toast.success("Deleted file successfully");
-				onFileChange();
+				deleteItem(file.id);
 			} else {
 				toast.error(res.data.error);
 			}
@@ -91,7 +80,7 @@ export default function FileActionsDropdown({ file, onFileChange }: ActionsDropD
 			console.log('Error while deleting file: ', error);
 			toast.error(error.response.data.message);
 		} finally {
-			onFileChange();
+			//onFileChange();
 		}
 	}
 
@@ -127,11 +116,13 @@ export default function FileActionsDropdown({ file, onFileChange }: ActionsDropD
 				{ name: newFilename },
 				{ headers: { "Content-Type": "application/json" }, withCredentials: true }
 			)
+			console.log(res.data);
+			renameItem(file.id, res.data);
 			toast.success(`Renamed file to ${res.data.filename}`);
 		} catch (error: any) {
 			toast.error(error.response.data.message)
 		} finally {
-			onFileChange();
+			//onFileChange();
 		}
 	}
 
@@ -164,7 +155,9 @@ export default function FileActionsDropdown({ file, onFileChange }: ActionsDropD
 			console.error(error);
 			toast.error(error.response?.data?.error || "Failed to share file");
 		} finally {
-			onFileChange();
+			// do nothing 
+			// would've onFileChange() but
+			// it exceeds rate limits :(
 		}
 	};
 	return (

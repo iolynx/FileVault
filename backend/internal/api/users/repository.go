@@ -18,11 +18,12 @@ func NewRepository(pool *pgxpool.Pool) *Repository {
 	}
 }
 
-func (r *Repository) CreateUser(ctx context.Context, email, name string, passwordHash string) (sqlc.User, error) {
+func (r *Repository) CreateUser(ctx context.Context, email, name string, passwordHash string, defaultStorageQuota int64) (sqlc.User, error) {
 	return r.queries.CreateUser(ctx, sqlc.CreateUserParams{
-		Email:    email,
-		Name:     name,
-		Password: passwordHash,
+		Email:        email,
+		Name:         name,
+		Password:     passwordHash,
+		StorageQuota: defaultStorageQuota,
 	})
 }
 

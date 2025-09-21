@@ -47,7 +47,7 @@ func main() {
 
 	// Initialize Users Repository, Service, Handler
 	userRepo := users.NewRepository(pool)
-	userService := users.NewService(userRepo, os.Getenv("JWT_SECRET"))
+	userService := users.NewService(userRepo, os.Getenv("JWT_SECRET"), cfg)
 	userHandler := users.NewHandler(userService)
 
 	// Initialize Files Repository, Service, Handler
@@ -60,7 +60,7 @@ func main() {
 	folderService := folders.NewService(folderRepo)
 	folderHandler := folders.NewHandler(folderService)
 
-	server := api.NewServer(userHandler, fileHandler, folderHandler, redisClient)
+	server := api.NewServer(userHandler, fileHandler, folderHandler, redisClient, cfg)
 
 	log.Println("server listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", server.Router))

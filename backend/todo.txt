@@ -7,13 +7,14 @@
 - add folders
 	- move file
 - check mimetype
-- storage quota alert
+- ENFORCE storage quotas
+- sort files table
 - admin panel (show all files, all download counts)
 - move all folders up in search results
 - password strength
-
-(BUG)
-- fix weird logout bug
+- audit logs
+- chron job to check storage from time to time
 
 (MISC)
 - fix log statements with %v
+- move all backend types to a single place

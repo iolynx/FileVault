@@ -17,9 +17,16 @@ interface ContentState {
 	fetchContents: (folderId: string | null, filters: any) => Promise<void>;
 	navigateToFolder: (folder: { id: string; filename: string }) => void;
 	navigateToPathIndex: (index: number) => void;
-	renameItem: (itemId: string, newName: string, context: "File" | "Folder") => void;
-	deleteItem: (itemId: string, itemType: 'file' | 'folder') => void;
+	renameItem: (itemId: string, updatedItem: ContentItem) => void;
+	deleteItem: (itemId: string) => void;
+	reset: () => void;
 }
+
+const initialState = {
+	path: [{ id: null, name: 'Home' }],
+	contents: [],
+	isLoading: false,
+};
 
 export const useContentStore = create<ContentState>((set, get) => ({
 	path: [{ id: null, name: 'Home' }],
@@ -42,45 +49,19 @@ export const useContentStore = create<ContentState>((set, get) => ({
 	},
 
 	// Takes the renamed file/folder and replaces the old one with it
-	renameItem: async (itemId: string, newName: string, context: "File" | "Folder") => {
-		try {
-			let updatedItemResponse;
-			if (context === "File") {
-				updatedItemResponse = await api.patch(`/files/${itemId}`, { name: newName });
-			} else {
-				updatedItemResponse = await api.patch(`/folders/${itemId}`, { name: newName });
-			}
-			const updatedItem = updatedItemResponse.data;
-			console.log('updated item: ', updatedItem);
-			console.error("hiihihi");
-
-			set((state) => ({
-				contents: state.contents.map((item) =>
-					item.id === itemId ? updatedItem : item
-				),
-			}));
-			toast.success(`${context} renamed successfully!`);
-		} catch (error) {
-			toast.error("Failed to rename item.");
-		}
+	renameItem: async (itemId: string, updatedItem: ContentItem) => {
+		set((state) => ({
+			contents: state.contents.map((item) =>
+				item.id === itemId ? updatedItem : item
+			),
+		}));
 	},
 
 	// Deletes a file/folder from the store
-	deleteItem: async (itemId: string, itemType: 'file' | 'folder') => {
-		try {
-			if (itemType === 'file') {
-				await api.delete(`/files/${itemId}`);
-			} else {
-				await api.delete(`/folders/${itemId}`);
-			}
-
-			set((state) => ({
-				contents: state.contents.filter((item) => item.id !== itemId),
-			}));
-			toast.success(`${itemType} deleted successfully!`);
-		} catch (error) {
-			toast.error(`Failed to delete ${itemType}.`);
-		}
+	deleteItem: async (itemId: string) => {
+		set((state) => ({
+			contents: state.contents.filter((item) => item.id !== itemId),
+		}));
 	},
 
 	// Navigates into a subfolder
@@ -94,4 +75,8 @@ export const useContentStore = create<ContentState>((set, get) => ({
 		const newPath = get().path.slice(0, index + 1);
 		set({ path: newPath });
 	},
+
+	reset: () => {
+		set(initialState);
+	}
 }));

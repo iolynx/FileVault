@@ -9,10 +9,11 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { formatBytes } from '@/lib/utils';
-import { User } from '@/types/User'
 import { Button } from './ui/button';
 import api from '@/lib/axios';
 import { useRouter } from 'next/navigation';
+import { useContentStore } from '@/stores/useContentStore';
+import { User } from '@/types/User';
 
 interface UserAccountPopoverProps {
 	user: User | null;
@@ -20,10 +21,11 @@ interface UserAccountPopoverProps {
 
 export function UserAccountPopover({ user }: UserAccountPopoverProps) {
 	// Return an empty div if user data hasn't loaded yet
-	if (user === null) {
+	if (user === null || user === undefined || user.name === undefined) {
 		return (
-			<div>
-			</div>
+			<Popover>
+
+			</Popover>
 		)
 	}
 
@@ -41,9 +43,11 @@ export function UserAccountPopover({ user }: UserAccountPopoverProps) {
 	const Logout = async () => {
 		try {
 			const res = await api.post("/auth/logout")
-			router.push("/login")
 		} catch (error) {
 			console.log("Error trying to logout: ", error)
+		} finally {
+			useContentStore.getState().reset();
+			router.push("/login")
 		}
 	}
 

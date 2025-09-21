@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -13,13 +12,14 @@ import (
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/folders"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/middleware"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/users"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/config"
 )
 
 type Server struct {
 	Router *chi.Mux
 }
 
-func NewServer(userHandler *users.Handler, fileHandler *files.FileHandler, folderHandler *folders.Handler, redisClient *redis.Client) *Server {
+func NewServer(userHandler *users.Handler, fileHandler *files.FileHandler, folderHandler *folders.Handler, redisClient *redis.Client, cfg *config.Config) *Server {
 	r := chi.NewRouter()
 
 	corsOptions := cors.New(cors.Options{
@@ -44,12 +44,12 @@ func NewServer(userHandler *users.Handler, fileHandler *files.FileHandler, folde
 		r.Post("/auth/logout", userHandler.Logout)
 	})
 
-	// TODO: pass the secret using config
-
 	// Protected routes
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.AuthMiddleware(os.Getenv("JWT_SECRET")))
-		r.Use(middleware.RateLimiter(redisClient, 2, 1*time.Second))
+		r.Use(middleware.AuthMiddleware(cfg.Server.JWTSecret))
+
+		rateLimitWindow := time.Duration(cfg.Server.RateLimitWindowSeconds) * time.Second
+		r.Use(middleware.RateLimiter(redisClient, cfg.Server.RateLimit, rateLimitWindow))
 
 		fileHandler.RegisterRoutes(r)
 		folderHandler.RegisterRoutes(r)

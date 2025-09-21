@@ -10,19 +10,25 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (email, name, password, created_at)
-VALUES ($1, $2, $3, NOW())
-RETURNING id, name, email, password, role, created_at, original_storage_bytes, dedup_storage_bytes
+INSERT INTO users (email, name, password, created_at, storage_quota)
+VALUES ($1, $2, $3, NOW(), $4)
+RETURNING id, name, email, password, role, created_at, original_storage_bytes, dedup_storage_bytes, storage_quota
 `
 
 type CreateUserParams struct {
-	Email    string `json:"email"`
-	Name     string `json:"name"`
-	Password string `json:"password"`
+	Email        string `json:"email"`
+	Name         string `json:"name"`
+	Password     string `json:"password"`
+	StorageQuota int64  `json:"storage_quota"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, createUser, arg.Email, arg.Name, arg.Password)
+	row := q.db.QueryRow(ctx, createUser,
+		arg.Email,
+		arg.Name,
+		arg.Password,
+		arg.StorageQuota,
+	)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -33,12 +39,13 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.CreatedAt,
 		&i.OriginalStorageBytes,
 		&i.DedupStorageBytes,
+		&i.StorageQuota,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, name, email, password, role, created_at, original_storage_bytes, dedup_storage_bytes FROM users WHERE email = $1
+SELECT id, name, email, password, role, created_at, original_storage_bytes, dedup_storage_bytes, storage_quota FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -53,12 +60,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.CreatedAt,
 		&i.OriginalStorageBytes,
 		&i.DedupStorageBytes,
+		&i.StorageQuota,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, name, email, password, role, created_at, original_storage_bytes, dedup_storage_bytes FROM users WHERE id = $1
+SELECT id, name, email, password, role, created_at, original_storage_bytes, dedup_storage_bytes, storage_quota FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
@@ -73,6 +81,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.CreatedAt,
 		&i.OriginalStorageBytes,
 		&i.DedupStorageBytes,
+		&i.StorageQuota,
 	)
 	return i, err
 }

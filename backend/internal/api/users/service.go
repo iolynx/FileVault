@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/apierror"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/config"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db/sqlc"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/userctx"
 	"github.com/golang-jwt/jwt/v5"
@@ -14,14 +15,16 @@ import (
 )
 
 type Service struct {
-	repo      *Repository
-	jwtSecret []byte
+	repo                *Repository
+	jwtSecret           []byte
+	defaultStorageQuota int64
 }
 
-func NewService(repo *Repository, jwtSecret string) *Service {
+func NewService(repo *Repository, jwtSecret string, cfg *config.Config) *Service {
 	return &Service{
-		repo:      repo,
-		jwtSecret: []byte(jwtSecret),
+		repo:                repo,
+		jwtSecret:           []byte(jwtSecret),
+		defaultStorageQuota: cfg.Server.DefaultStorageQuota,
 	}
 }
 
@@ -36,7 +39,7 @@ func (s *Service) Signup(ctx context.Context, email, name string, password strin
 		return sqlc.User{}, fmt.Errorf("User already exists")
 	}
 
-	user, err := s.repo.CreateUser(ctx, email, name, string(passwordHash))
+	user, err := s.repo.CreateUser(ctx, email, name, string(passwordHash), s.defaultStorageQuota)
 	if err != nil {
 		return sqlc.User{}, fmt.Errorf("Failed to create user: %w", err)
 	}

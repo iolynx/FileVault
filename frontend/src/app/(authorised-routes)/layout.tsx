@@ -9,10 +9,11 @@ import {
 } from "@/components/ui/navigation-menu";
 import { ReactNode } from "react";
 import { UserAccountPopover } from "@/components/UserAccountPopover";
+import { StorageQuotaBanner } from "@/components/StorageQuotaBanner";
 import { getCurrentUser } from "@/lib/auth";
 
 const AuthorizedLayout = async ({ children }: { children: ReactNode }) => {
-  const user = await getCurrentUser()
+  const user = await getCurrentUser();
   return (
     <div className="flex flex-col items-center h-screen w-full">
       <div className="flex flex-row w-full place-content-around">
@@ -40,6 +41,8 @@ const AuthorizedLayout = async ({ children }: { children: ReactNode }) => {
         </nav>
         <div>
           <UserAccountPopover user={user} />
+
+          <StorageQuotaBanner user={user} />
         </div>
       </div>
       <section className="w-full px-4">{children}</section>

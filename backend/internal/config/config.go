@@ -21,7 +21,11 @@ type Config struct {
 
 // ServerConfig holds HTTP server settings.
 type ServerConfig struct {
-	Port string
+	Port                   string
+	DefaultStorageQuota    int64
+	RateLimit              int
+	RateLimitWindowSeconds int
+	JWTSecret              string
 }
 
 // DBConfig holds database connection settings.
@@ -54,7 +58,8 @@ func LoadConfig() (*Config, error) {
 	requiredVars := []string{
 		"PORT", "MINIO_ENDPOINT", "MINIO_ACCESS", "MINIO_SECRET",
 		"MINIO_BUCKET", "DB_USER", "DB_PASSWORD", "DB_HOST", "DB_PORT",
-		"DB_NAME", "REDIS_ADDR",
+		"DB_NAME", "REDIS_ADDR", "DEFAULT_STORAGE_QUOTA", "API_RATE_LIMIT",
+		"API_RATE_LIMIT_WINDOW_SECONDS", "JWT_SECRET",
 	}
 	for _, v := range requiredVars {
 		if os.Getenv(v) == "" {
@@ -78,9 +83,26 @@ func LoadConfig() (*Config, error) {
 		return nil, errors.New("invalid value for MINIO_SECURE")
 	}
 
+	defaultQuota, err := strconv.ParseInt(os.Getenv("DEFAULT_STORAGE_QUOTA"), 10, 64)
+	if err != nil {
+		return nil, errors.New("invalid value for DEFAULT_STORAGE_QUOTA")
+	}
+	RateLimit, err := strconv.Atoi(os.Getenv("API_RATE_LIMIT"))
+	if err != nil {
+		return nil, errors.New("invalid value for API_RATE_LIMIT")
+	}
+	RateLimitWindowSeconds, err := strconv.Atoi(os.Getenv("API_RATE_LIMIT_WINDOW_SECONDS"))
+	if err != nil {
+		return nil, errors.New("invalid value for API_RATE_LIMIT_WINDOW_SECONDS")
+	}
+
 	cfg := &Config{
 		Server: ServerConfig{
-			Port: os.Getenv("PORT"),
+			Port:                   os.Getenv("PORT"),
+			DefaultStorageQuota:    defaultQuota,
+			RateLimit:              RateLimit,
+			RateLimitWindowSeconds: RateLimitWindowSeconds,
+			JWTSecret:              os.Getenv("JWT_SECRET"),
 		},
 		Database: DBConfig{
 			URL: dsn,

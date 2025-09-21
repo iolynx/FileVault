@@ -15,6 +15,10 @@ import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { DropzoneOverlay } from "@/components/DropzoneOverlay";
 import { useDragAndDrop } from "@/hooks/useDragAndDrop";
 import { useFileUploader } from "@/hooks/useFileUploader";
+import { MultiSelectOption } from "@/components/multi-select";
+import { mapUsersToOptions } from "@/lib/utils";
+import { User } from "@/types/User";
+import { StorageQuotaBanner } from "@/components/StorageQuotaBanner";
 
 const filterOptions: FilterOption[] = [
 	{ value: 'content_type', label: 'MIME Type' },
@@ -29,6 +33,21 @@ const DashboardPage = () => {
 	const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
 	const currentFolder = path[path.length - 1];
 	const currentFolderId = currentFolder ? currentFolder.id : null;
+	const [shareDialogOptions, setShareDialogOptions] = useState<MultiSelectOption[]>([]);
+	const [loading, setLoading] = useState(false)
+
+	const fetchUsers = async () => {
+		try {
+			const res = await api.get("/users",
+				{ withCredentials: true },
+			)
+			const users: User[] = await res.data
+			setShareDialogOptions(mapUsersToOptions(users));
+			console.log(shareDialogOptions);
+		} catch (error) {
+			console.log("error while fetching users:", error)
+		}
+	}
 
 	const handleFilterChange = (column: string, value: string | Date | undefined) => {
 		setActiveFilters(prevFilters => {
@@ -70,7 +89,8 @@ const DashboardPage = () => {
 		// Debounce the fetch call
 		const debounceTimer = setTimeout(() => {
 			fetchContents(currentFolder.id, filtersObject);
-		}, 250);
+			fetchUsers();
+		}, 750);
 
 		return () => clearTimeout(debounceTimer);
 	}, [path, activeFilters, fetchContents]);
@@ -82,6 +102,7 @@ const DashboardPage = () => {
 			return acc;
 		}, {} as Record<string, string>);
 		fetchContents(currentFolder.id, filtersObject);
+		fetchUsers();
 	};
 
 	const handleUpload = async (files: File[]) => {
@@ -120,7 +141,7 @@ const DashboardPage = () => {
 					<>
 						<Breadcrumbs />
 						<Card className="rounded-2xl border shadow-sm overflow-hidden w-full max-w-7xl mt-4 pt-1 pb-1">
-							<FilesTable contents={contents} onDataChange={refreshContents} />
+							<FilesTable contents={contents} onDataChange={refreshContents} shareDialogOptions={shareDialogOptions} />
 						</Card>
 					</>
 				}

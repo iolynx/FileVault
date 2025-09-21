@@ -26,7 +26,6 @@ export function RenameDialogModal({ isOpen, isOpenChange, originalFilename, onCo
 	const [extension, setExtension] = useState('');
 
 	useEffect(() => {
-		console.log(originalFilename);
 		const lastDotIndex = originalFilename.lastIndexOf('.');
 
 		// Handle files with no extension
@@ -46,7 +45,6 @@ export function RenameDialogModal({ isOpen, isOpenChange, originalFilename, onCo
 		}
 
 		const newFilename = extension ? `${baseName.trim()}.${extension}` : baseName.trim();
-		console.log(newFilename)
 		onConfirm(newFilename);
 	};
 

@@ -51,14 +51,15 @@ export const useFileUploader = ({ onUploadComplete }: UseFileUploaderProps) => {
 					}
 				},
 			});
-		} catch (error) {
-			console.error('Upload failed:', error);
-			toast.error("Upload Failed!");
-		} finally {
+
 			if (toastIdRef.current) {
 				toast.dismiss(toastIdRef.current);
 				toast.success('Files uploaded successfully!');
 			}
+		} catch (error: any) {
+			console.log('Upload failed:', error);
+			toast.error(`Upload Failed: ${error.response.data.error}`);
+		} finally {
 			setIsUploading(false);
 			toastIdRef.current = null;
 			onUploadComplete(); // Refresh the content list

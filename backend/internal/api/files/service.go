@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"mime/multipart"
+	"net/http"
 	"time"
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/apierror"
@@ -33,6 +34,17 @@ type File struct {
 	UploadedAt    time.Time `json:"uploaded_at"`
 	UserOwnsFile  bool      `json:"user_owns_file"`
 	DownloadCount *int64    `json:"download_count,omitempty"`
+}
+
+type FileResponse struct {
+	ID            uuid.UUID `json:"id"`
+	Filename      string    `json:"filename"`
+	Size          int64     `json:"size"`
+	ContentType   string    `json:"content_type"`
+	UploadedAt    time.Time `json:"uploaded_at"`
+	UserOwnsFile  bool      `json:"user_owns_file"`
+	DownloadCount *int64    `json:"download_count,omitempty"`
+	ItemType      string    `json:"item_type"`
 }
 
 type User struct {
@@ -101,7 +113,18 @@ func (s *Service) UploadFile(ctx context.Context, file multipart.File, header *m
 		return s.repo.CreateFile(ctx, params)
 	}
 
-	// New blob: upload to storage with this objectKey
+	// New blob: upload to storage with this objectKey after checking storage quota
+	// Get this user's storage quota
+	user, err := s.repo.queries.GetUserByID(ctx, ownerID)
+	if err != nil {
+		return sqlc.File{}, apierror.NewInternalServerError("Could not retriee internal data")
+	}
+	// Get this blob's size, return HTTP 413 "Payload Too Large" used for StorageQuota errors
+	newBlobSize := int64(len(buf))
+	if user.DedupStorageBytes+newBlobSize > user.StorageQuota {
+		return sqlc.File{}, apierror.New(http.StatusRequestEntityTooLarge, "Storage quota exceeded")
+	}
+
 	objectKey := fmt.Sprintf("%s_%s", sha, header.Filename)
 	reader := bytes.NewReader(buf)
 	_, err = s.storage.UploadBlob(ctx, reader, objectKey, int64(len(buf)), header.Header.Get("Content-Type"))
@@ -127,7 +150,7 @@ func (s *Service) UploadFile(ctx context.Context, file multipart.File, header *m
 		BlobID:       newBlob.ID,
 		Filename:     header.Filename,
 		DeclaredMime: util.NewText(header.Header.Get("Content-Type")),
-		Size:         int64(len(buf)),
+		Size:         newBlobSize,
 	}
 	if folderID != nil {
 		params.FolderID = pgtype.UUID{Bytes: *folderID, Valid: true}
@@ -287,19 +310,19 @@ func (s *Service) GetBlobReader(ctx context.Context, file sqlc.File) (io.ReadClo
 	return obj, nil
 }
 
-func (s *Service) UpdateFilename(ctx context.Context, newFilename string, fileID uuid.UUID) (File, error) {
+func (s *Service) UpdateFilename(ctx context.Context, newFilename string, fileID uuid.UUID) (FileResponse, error) {
 	userID, ok := userctx.GetUserID(ctx)
 	if !ok {
-		return File{}, apierror.NewUnauthorizedError()
+		return FileResponse{}, apierror.NewUnauthorizedError()
 	}
 
 	file, err := s.repo.GetFileByUUID(ctx, fileID)
 	if err != nil {
-		return File{}, err
+		return FileResponse{}, err
 	}
 
 	if file.OwnerID != userID {
-		return File{}, apierror.NewForbiddenError()
+		return FileResponse{}, apierror.NewForbiddenError()
 	}
 
 	file, err = s.repo.queries.UpdateFilename(ctx, sqlc.UpdateFilenameParams{
@@ -307,18 +330,19 @@ func (s *Service) UpdateFilename(ctx context.Context, newFilename string, fileID
 		ID:       fileID,
 	})
 	if err != nil {
-		return File{}, err
+		return FileResponse{}, err
 	}
-
-	return File{
+	return FileResponse{
 		ID:            file.ID,
-		Size:          file.Size,
 		Filename:      file.Filename,
+		Size:          file.Size,
 		ContentType:   file.DeclaredMime.String,
 		UploadedAt:    file.UploadedAt.Time,
 		UserOwnsFile:  file.OwnerID == userID,
 		DownloadCount: &file.DownloadCount.Int64,
+		ItemType:      "file",
 	}, nil
+
 }
 
 func (s *Service) ShareFile(ctx context.Context, fileID uuid.UUID, targetUserID int64) error {

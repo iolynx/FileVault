@@ -30,6 +30,10 @@ export function InfoModal({ isOpen, onOpenChange, item }: InfoModalProps) {
 		return null;
 	}
 
+	if (!item.item_type) {
+		return null;
+	}
+
 	// Capitalize the item type for the title (File or Folder)
 	const capitalizedType = item.item_type.charAt(0).toUpperCase() + item.item_type.slice(1);
 
