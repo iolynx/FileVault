@@ -173,6 +173,8 @@ WHERE
     AND (sqlc.arg(mime_type)::TEXT = '' OR f.declared_mime = sqlc.arg(mime_type)::TEXT)
     AND (sqlc.arg(uploaded_after)::TIMESTAMPTZ IS NULL OR f.uploaded_at > sqlc.arg(uploaded_after)::TIMESTAMPTZ)
     AND (sqlc.arg(uploaded_before)::TIMESTAMPTZ IS NULL OR f.uploaded_at < sqlc.arg(uploaded_before)::TIMESTAMPTZ)
+    AND (sqlc.narg(min_size)::BIGINT IS NULL OR f.size >= sqlc.narg(min_size)::BIGINT)
+    AND (sqlc.narg(max_size)::BIGINT IS NULL OR f.size <= sqlc.narg(max_size)::BIGINT)
 
 ORDER BY item_type ASC, filename ASC; -- Order folders before files
 
@@ -194,15 +196,17 @@ SELECT
     f.download_count, f.folder_id
 FROM files f
 WHERE f.owner_id = sqlc.arg(user_id) AND f.folder_id IS NULL
-  AND (sqlc.arg(search)::TEXT = '' OR f.filename ILIKE '%' || sqlc.arg(search)::TEXT || '%')
-  AND (sqlc.arg(mime_type)::TEXT = '' OR f.declared_mime = sqlc.arg(mime_type)::TEXT)
-  AND (sqlc.arg(uploaded_after)::TIMESTAMPTZ IS NULL OR f.uploaded_at > sqlc.arg(uploaded_after)::TIMESTAMPTZ)
-  AND (sqlc.arg(uploaded_before)::TIMESTAMPTZ IS NULL OR f.uploaded_at < sqlc.arg(uploaded_before)::TIMESTAMPTZ)
-  AND (
-      sqlc.arg(ownership_status)::int = 0
-      OR (sqlc.arg(ownership_status)::int = 1 AND f.owner_id = sqlc.arg(user_id))
-      OR (sqlc.arg(ownership_status)::int = 2 AND f.owner_id <> sqlc.arg(user_id))
-  )
+    AND (sqlc.arg(search)::TEXT = '' OR f.filename ILIKE '%' || sqlc.arg(search)::TEXT || '%')
+    AND (sqlc.arg(mime_type)::TEXT = '' OR f.declared_mime = sqlc.arg(mime_type)::TEXT)
+    AND (sqlc.arg(uploaded_after)::TIMESTAMPTZ IS NULL OR f.uploaded_at > sqlc.arg(uploaded_after)::TIMESTAMPTZ)
+    AND (sqlc.arg(uploaded_before)::TIMESTAMPTZ IS NULL OR f.uploaded_at < sqlc.arg(uploaded_before)::TIMESTAMPTZ)
+    AND (sqlc.narg(min_size)::BIGINT IS NULL OR f.size >= sqlc.narg(min_size)::BIGINT)
+    AND (sqlc.narg(max_size)::BIGINT IS NULL OR f.size <= sqlc.narg(max_size)::BIGINT)
+    AND (
+        sqlc.arg(ownership_status)::int = 0
+        OR (sqlc.arg(ownership_status)::int = 1 AND f.owner_id = sqlc.arg(user_id))
+        OR (sqlc.arg(ownership_status)::int = 2 AND f.owner_id <> sqlc.arg(user_id))
+      )
 
 UNION ALL
 
@@ -217,6 +221,8 @@ WHERE fs.shared_with = sqlc.arg(user_id)
   AND (sqlc.arg(mime_type)::TEXT = '' OR f.declared_mime = sqlc.arg(mime_type)::TEXT)
   AND (sqlc.arg(uploaded_after)::TIMESTAMPTZ IS NULL OR f.uploaded_at > sqlc.arg(uploaded_after)::TIMESTAMPTZ)
   AND (sqlc.arg(uploaded_before)::TIMESTAMPTZ IS NULL OR f.uploaded_at < sqlc.arg(uploaded_before)::TIMESTAMPTZ)
+  AND (sqlc.narg(min_size)::BIGINT IS NULL OR f.size >= sqlc.narg(min_size)::BIGINT)
+  AND (sqlc.narg(max_size)::BIGINT IS NULL OR f.size <= sqlc.narg(max_size)::BIGINT)
 
 ORDER BY item_type ASC, filename ASC;
 

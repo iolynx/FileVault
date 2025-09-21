@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -457,14 +458,16 @@ type ContentItem struct {
 }
 
 type ListContentsRequest struct {
-	FolderID        *uuid.UUID `json:"folder_id"`
-	Search          string     `json:"search"`
-	MimeType        string     `json:"content_type"`
-	UploadedAfter   *time.Time `json:"uploaded_after"`
-	UploadedBefore  *time.Time `json:"uploaded_before"`
-	OwnershipStatus int32      `json:"user_owns_file"`
-	Limit           int32      `json:"limit"`
-	Offset          int32      `json:"offset"`
+	FolderID        *uuid.UUID    `json:"folder_id"`
+	Search          string        `json:"search"`
+	MimeType        string        `json:"content_type"`
+	UploadedAfter   *time.Time    `json:"uploaded_after"`
+	UploadedBefore  *time.Time    `json:"uploaded_before"`
+	OwnershipStatus int32         `json:"user_owns_file"`
+	Limit           int32         `json:"limit"`
+	Offset          int32         `json:"offset"`
+	MinSize         sql.NullInt64 `json:"min_size"`
+	MaxSize         sql.NullInt64 `json:"max_size"`
 }
 
 func (s *Service) ListContents(ctx context.Context, req ListContentsRequest) ([]ContentItem, error) {
@@ -494,6 +497,8 @@ func (s *Service) ListContents(ctx context.Context, req ListContentsRequest) ([]
 			MimeType:       req.MimeType,
 			UploadedAfter:  util.TimeToTimestamptz(req.UploadedAfter),
 			UploadedBefore: util.TimeToTimestamptz(req.UploadedBefore),
+			MinSize:        req.MinSize,
+			MaxSize:        req.MaxSize,
 		}
 		rows, repoErr := s.repo.ListFolderContents(ctx, params)
 		err = repoErr
@@ -506,6 +511,8 @@ func (s *Service) ListContents(ctx context.Context, req ListContentsRequest) ([]
 			UploadedAfter:   util.TimeToTimestamptz(req.UploadedAfter),
 			UploadedBefore:  util.TimeToTimestamptz(req.UploadedBefore),
 			OwnershipStatus: req.OwnershipStatus,
+			MinSize:         req.MinSize,
+			MaxSize:         req.MaxSize,
 		}
 		rows, repoErr := s.repo.ListRootContents(ctx, params)
 		err = repoErr

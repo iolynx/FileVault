@@ -1,6 +1,7 @@
 package files
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -149,6 +150,22 @@ func (h *FileHandler) ListContents(w http.ResponseWriter, r *http.Request) error
 
 	if ownershipStatus := r.URL.Query().Get("user_owns_file"); ownershipStatus != "" {
 		req.OwnershipStatus = util.ParseInt32OrDefault(ownershipStatus, 0)
+	}
+
+	if minSizeStr := r.URL.Query().Get("min_size"); minSizeStr != "" {
+		if val, err := strconv.ParseInt(minSizeStr, 10, 64); err == nil {
+			req.MinSize = sql.NullInt64{Int64: val, Valid: true}
+		} else {
+			return apierror.NewBadRequestError("Invalid min_size parameter")
+		}
+	}
+
+	if maxSizeStr := r.URL.Query().Get("max_size"); maxSizeStr != "" {
+		if val, err := strconv.ParseInt(maxSizeStr, 10, 64); err == nil {
+			req.MaxSize = sql.NullInt64{Int64: val, Valid: true}
+		} else {
+			return apierror.NewBadRequestError("Invalid max_size parameter")
+		}
 	}
 
 	contents, err := h.service.ListContents(r.Context(), req)

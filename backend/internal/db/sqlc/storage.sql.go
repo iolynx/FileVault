@@ -7,6 +7,7 @@ package sqlc
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -274,7 +275,7 @@ type GetFilesForUserRow struct {
 	MimeType      pgtype.Text        `json:"mime_type"`
 	UploadedAt    pgtype.Timestamptz `json:"uploaded_at"`
 	IsPublic      pgtype.Bool        `json:"is_public"`
-	DownloadCount pgtype.Int8        `json:"download_count"`
+	DownloadCount sql.NullInt64      `json:"download_count"`
 }
 
 func (q *Queries) GetFilesForUser(ctx context.Context, arg GetFilesForUserParams) ([]GetFilesForUserRow, error) {
@@ -393,7 +394,7 @@ type ListFilesByOwnerRow struct {
 	ContentType   pgtype.Text        `json:"content_type"`
 	UploadedAt    pgtype.Timestamptz `json:"uploaded_at"`
 	IsPublic      pgtype.Bool        `json:"is_public"`
-	DownloadCount pgtype.Int8        `json:"download_count"`
+	DownloadCount sql.NullInt64      `json:"download_count"`
 }
 
 func (q *Queries) ListFilesByOwner(ctx context.Context, arg ListFilesByOwnerParams) ([]ListFilesByOwnerRow, error) {
@@ -473,7 +474,7 @@ type ListFilesForUserRow struct {
 	ContentType   pgtype.Text        `json:"content_type"`
 	UploadedAt    pgtype.Timestamptz `json:"uploaded_at"`
 	UserOwnsFile  bool               `json:"user_owns_file"`
-	DownloadCount pgtype.Int8        `json:"download_count"`
+	DownloadCount sql.NullInt64      `json:"download_count"`
 }
 
 func (q *Queries) ListFilesForUser(ctx context.Context, arg ListFilesForUserParams) ([]ListFilesForUserRow, error) {
@@ -604,6 +605,8 @@ WHERE
     AND ($4::TEXT = '' OR f.declared_mime = $4::TEXT)
     AND ($5::TIMESTAMPTZ IS NULL OR f.uploaded_at > $5::TIMESTAMPTZ)
     AND ($6::TIMESTAMPTZ IS NULL OR f.uploaded_at < $6::TIMESTAMPTZ)
+    AND ($7::BIGINT IS NULL OR f.size >= $7::BIGINT)
+    AND ($8::BIGINT IS NULL OR f.size <= $8::BIGINT)
 
 ORDER BY item_type ASC, filename ASC
 `
@@ -615,17 +618,19 @@ type ListFolderContentsParams struct {
 	MimeType       string             `json:"mime_type"`
 	UploadedAfter  pgtype.Timestamptz `json:"uploaded_after"`
 	UploadedBefore pgtype.Timestamptz `json:"uploaded_before"`
+	MinSize        sql.NullInt64      `json:"min_size"`
+	MaxSize        sql.NullInt64      `json:"max_size"`
 }
 
 type ListFolderContentsRow struct {
 	ID            uuid.UUID          `json:"id"`
 	Filename      string             `json:"filename"`
 	ItemType      string             `json:"item_type"`
-	Size          pgtype.Int8        `json:"size"`
+	Size          sql.NullInt64      `json:"size"`
 	ContentType   pgtype.Text        `json:"content_type"`
 	UploadedAt    pgtype.Timestamptz `json:"uploaded_at"`
 	UserOwnsFile  bool               `json:"user_owns_file"`
-	DownloadCount pgtype.Int8        `json:"download_count"`
+	DownloadCount sql.NullInt64      `json:"download_count"`
 	FolderID      pgtype.UUID        `json:"folder_id"`
 }
 
@@ -637,6 +642,8 @@ func (q *Queries) ListFolderContents(ctx context.Context, arg ListFolderContents
 		arg.MimeType,
 		arg.UploadedAfter,
 		arg.UploadedBefore,
+		arg.MinSize,
+		arg.MaxSize,
 	)
 	if err != nil {
 		return nil, err
@@ -685,15 +692,17 @@ SELECT
     f.download_count, f.folder_id
 FROM files f
 WHERE f.owner_id = $1 AND f.folder_id IS NULL
-  AND ($2::TEXT = '' OR f.filename ILIKE '%' || $2::TEXT || '%')
-  AND ($3::TEXT = '' OR f.declared_mime = $3::TEXT)
-  AND ($4::TIMESTAMPTZ IS NULL OR f.uploaded_at > $4::TIMESTAMPTZ)
-  AND ($5::TIMESTAMPTZ IS NULL OR f.uploaded_at < $5::TIMESTAMPTZ)
-  AND (
-      $6::int = 0
-      OR ($6::int = 1 AND f.owner_id = $1)
-      OR ($6::int = 2 AND f.owner_id <> $1)
-  )
+    AND ($2::TEXT = '' OR f.filename ILIKE '%' || $2::TEXT || '%')
+    AND ($3::TEXT = '' OR f.declared_mime = $3::TEXT)
+    AND ($4::TIMESTAMPTZ IS NULL OR f.uploaded_at > $4::TIMESTAMPTZ)
+    AND ($5::TIMESTAMPTZ IS NULL OR f.uploaded_at < $5::TIMESTAMPTZ)
+    AND ($6::BIGINT IS NULL OR f.size >= $6::BIGINT)
+    AND ($7::BIGINT IS NULL OR f.size <= $7::BIGINT)
+    AND (
+        $8::int = 0
+        OR ($8::int = 1 AND f.owner_id = $1)
+        OR ($8::int = 2 AND f.owner_id <> $1)
+      )
 
 UNION ALL
 
@@ -708,6 +717,8 @@ WHERE fs.shared_with = $1
   AND ($3::TEXT = '' OR f.declared_mime = $3::TEXT)
   AND ($4::TIMESTAMPTZ IS NULL OR f.uploaded_at > $4::TIMESTAMPTZ)
   AND ($5::TIMESTAMPTZ IS NULL OR f.uploaded_at < $5::TIMESTAMPTZ)
+  AND ($6::BIGINT IS NULL OR f.size >= $6::BIGINT)
+  AND ($7::BIGINT IS NULL OR f.size <= $7::BIGINT)
 
 ORDER BY item_type ASC, filename ASC
 `
@@ -718,6 +729,8 @@ type ListRootContentsParams struct {
 	MimeType        string             `json:"mime_type"`
 	UploadedAfter   pgtype.Timestamptz `json:"uploaded_after"`
 	UploadedBefore  pgtype.Timestamptz `json:"uploaded_before"`
+	MinSize         sql.NullInt64      `json:"min_size"`
+	MaxSize         sql.NullInt64      `json:"max_size"`
 	OwnershipStatus int32              `json:"ownership_status"`
 }
 
@@ -725,11 +738,11 @@ type ListRootContentsRow struct {
 	ID            uuid.UUID          `json:"id"`
 	Filename      string             `json:"filename"`
 	ItemType      string             `json:"item_type"`
-	Size          pgtype.Int8        `json:"size"`
+	Size          sql.NullInt64      `json:"size"`
 	ContentType   pgtype.Text        `json:"content_type"`
 	UploadedAt    pgtype.Timestamptz `json:"uploaded_at"`
 	UserOwnsFile  bool               `json:"user_owns_file"`
-	DownloadCount pgtype.Int8        `json:"download_count"`
+	DownloadCount sql.NullInt64      `json:"download_count"`
 	FolderID      pgtype.UUID        `json:"folder_id"`
 }
 
@@ -741,6 +754,8 @@ func (q *Queries) ListRootContents(ctx context.Context, arg ListRootContentsPara
 		arg.MimeType,
 		arg.UploadedAfter,
 		arg.UploadedBefore,
+		arg.MinSize,
+		arg.MaxSize,
 		arg.OwnershipStatus,
 	)
 	if err != nil {

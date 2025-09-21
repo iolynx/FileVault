@@ -7,14 +7,16 @@
 - add folders
 	- move file
 - check mimetype
-- ENFORCE storage quotas
+- file tags
 - sort files table
 - admin panel (show all files, all download counts)
 - move all folders up in search results
 - password strength
 - audit logs
 - chron job to check storage from time to time
+- deleting folders kills files
 
 (MISC)
 - fix log statements with %v
 - move all backend types to a single place
+- remove useless queries

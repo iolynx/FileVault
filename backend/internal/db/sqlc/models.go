@@ -5,6 +5,8 @@
 package sqlc
 
 import (
+	"database/sql"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -29,7 +31,7 @@ type File struct {
 	UploadedAt    pgtype.Timestamptz `json:"uploaded_at"`
 	IsPublic      pgtype.Bool        `json:"is_public"`
 	PublicToken   pgtype.UUID        `json:"public_token"`
-	DownloadCount pgtype.Int8        `json:"download_count"`
+	DownloadCount sql.NullInt64      `json:"download_count"`
 	FolderID      pgtype.UUID        `json:"folder_id"`
 }
 

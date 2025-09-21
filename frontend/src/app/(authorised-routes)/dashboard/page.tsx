@@ -18,7 +18,6 @@ import { useFileUploader } from "@/hooks/useFileUploader";
 import { MultiSelectOption } from "@/components/multi-select";
 import { mapUsersToOptions } from "@/lib/utils";
 import { User } from "@/types/User";
-import { StorageQuotaBanner } from "@/components/StorageQuotaBanner";
 
 const filterOptions: FilterOption[] = [
 	{ value: 'content_type', label: 'MIME Type' },
@@ -43,7 +42,6 @@ const DashboardPage = () => {
 			)
 			const users: User[] = await res.data
 			setShareDialogOptions(mapUsersToOptions(users));
-			console.log(shareDialogOptions);
 		} catch (error) {
 			console.log("error while fetching users:", error)
 		}
@@ -77,6 +75,25 @@ const DashboardPage = () => {
 		});
 	};
 
+	const handleSizeFilterChange = (sizeFilter: { min_size: number | null, max_size: number | null }) => {
+		setActiveFilters(prevFilters => {
+			// Remove any old size filters
+			let updatedFilters = prevFilters.filter(
+				f => f.column !== 'min_size' && f.column !== 'max_size'
+			);
+
+			// If the new size filters aren't null, add to activeFilters
+			if (sizeFilter.min_size !== null) {
+				updatedFilters.push({ column: 'min_size', value: String(sizeFilter.min_size) });
+			}
+
+			if (sizeFilter.max_size !== null) {
+				updatedFilters.push({ column: 'max_size', value: String(sizeFilter.max_size) });
+			}
+
+			return updatedFilters;
+		});
+	};
 	useEffect(() => {
 		const currentFolder = path[path.length - 1];
 
@@ -130,6 +147,7 @@ const DashboardPage = () => {
 					<SearchAndFilterComponent
 						activeFilters={activeFilters}
 						onFilterChange={handleFilterChange}
+						onSizeFilterChange={handleSizeFilterChange}
 					/>
 				</div>
 				<div className="m-4">

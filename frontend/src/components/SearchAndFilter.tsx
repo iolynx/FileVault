@@ -8,6 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuSubTrigger } from "./ui/
 import { Button } from "./ui/button";
 import { DatePicker } from "./DatePicker";
 import { ArrowRightIcon } from "lucide-react";
+import { SizeFilter } from "./SizeFilter";
 
 const locationOptions = [
 	{ value: '0', label: 'All Locations' },
@@ -21,13 +22,22 @@ const mimeTypeOptions = [
 	{ value: 'image/png', label: 'PNG Image' },
 ];
 
+const PREDEFINED_RANGES = [
+	{ label: 'Tiny (< 1 MB)', minBytes: 0, maxBytes: 1048576 },
+	{ label: 'Small (1-10 MB)', minBytes: 1048576, maxBytes: 10485760 },
+	{ label: 'Medium (10-100 MB)', minBytes: 10485760, maxBytes: 104857600 },
+	{ label: 'Large (> 100 MB)', minBytes: 104857600, maxBytes: null }, // No upper limit
+];
+
 interface SearchAndFilterProps {
 	activeFilters: ActiveFilter[];
 	onFilterChange: (column: string, value: Date | string | undefined) => void;
+	onSizeFilterChange: (filter: { min_size: number | null, max_size: number | null }) => void;
 }
 
-export function SearchAndFilterComponent({ activeFilters, onFilterChange }: SearchAndFilterProps) {
+export function SearchAndFilterComponent({ activeFilters, onFilterChange, onSizeFilterChange }: SearchAndFilterProps) {
 	// Helper function to get the current value for any filter
+	console.log(activeFilters)
 	const getActiveValue = (column: string) =>
 		activeFilters.find((f) => f.column === column)?.value || '';
 
@@ -64,9 +74,14 @@ export function SearchAndFilterComponent({ activeFilters, onFilterChange }: Sear
 					onChange={(newValue) => onFilterChange('content_type', newValue)}
 				/>
 
+				<SizeFilter
+					ranges={PREDEFINED_RANGES}
+					onApplyFilter={(filter) => { onSizeFilterChange(filter) }}
+				/>
+
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
-						<Button variant="outline" className="w-[180px] justify-start font-normal">
+						<Button variant="outline" className="justify-start font-normal">
 							{afterDateObject ? format(afterDateObject, "PPP") : "Uploaded After..."}
 						</Button>
 					</DropdownMenuTrigger>
@@ -80,7 +95,7 @@ export function SearchAndFilterComponent({ activeFilters, onFilterChange }: Sear
 				<ArrowRightIcon size={16} className="align-bottom mt-2" />
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
-						<Button variant="outline" className="w-[180px] justify-start font-normal">
+						<Button variant="outline" className="justify-start font-normal">
 							{beforeDateObject ? format(beforeDateObject, "PPP") : "Uploaded Before..."}
 						</Button>
 					</DropdownMenuTrigger>
