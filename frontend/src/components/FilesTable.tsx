@@ -18,9 +18,42 @@ interface FilesTableProps {
 	onSort: (key: string) => void;
 }
 
+/**
+ * Props for FilesTable
+ * 
+ * @typedef {Object} FilesTableProps
+ * @property {ContentItem[]} contents - Array of file/folder items to display in the table
+ * @property {() => void} onDataChange - Callback to refresh data after changes (e.g., file upload, rename)
+ * @property {SortConfig} sortConfig - Current sorting configuration for the table
+ * @property {(key: string) => void} onSort - Callback triggered when the user sorts by a column
+ */
+
+/**
+ * FilesTable component
+ * 
+ * Renders a table of files and folders.
+ * This component supports;
+ * - Clicking folders to navigate into them
+ * - Sorting by a few columns using the provided sortConfig and onSort callback
+ * - Refreshing data via the onDataChange callback
+ * 
+ * Uses the `useContentStore` hook to navigate into folders.
+ * 
+ * @param {FilesTableProps} props - Component props
+ * @returns {JSX.Element} JSX element rendering the files/folders table
+ * 
+ * @component
+ */
+
 export default function FilesTable({ contents, onDataChange, sortConfig, onSort }: FilesTableProps) {
 	const { navigateToFolder } = useContentStore();
 
+	/**
+	 * Handles a row click in the table.
+	 * If the clicked item is a folder, navigates into that folder (using useContentStore).
+	 * 
+	 * @param {ContentItem} item - The clicked content item (file or folder)
+	 */
 	const handleRowClick = (item: ContentItem) => {
 		if (item.item_type === 'folder') {
 			navigateToFolder({ id: item.id, filename: item.filename });

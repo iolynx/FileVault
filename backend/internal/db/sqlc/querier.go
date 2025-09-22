@@ -16,7 +16,6 @@ type Querier interface {
 	CreateFile(ctx context.Context, arg CreateFileParams) (File, error)
 	CreateFolder(ctx context.Context, arg CreateFolderParams) (Folder, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
-	DecrementBlobRefcount(ctx context.Context, id uuid.UUID) (int32, error)
 	DeleteAllSharesForFile(ctx context.Context, fileID uuid.UUID) error
 	DeleteBlob(ctx context.Context, id uuid.UUID) error
 	DeleteBlobIfUnused(ctx context.Context, id uuid.UUID) (string, error)
@@ -33,11 +32,9 @@ type Querier interface {
 	GetFolderByID(ctx context.Context, id uuid.UUID) (Folder, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
-	IncrementBlobRefcount(ctx context.Context, id uuid.UUID) (int32, error)
 	IncrementFileDownloadCount(ctx context.Context, id uuid.UUID) error
 	ListAllFiles(ctx context.Context, arg ListAllFilesParams) ([]ListAllFilesRow, error)
 	ListFilesByOwner(ctx context.Context, arg ListFilesByOwnerParams) ([]ListFilesByOwnerRow, error)
-	ListFilesForUser(ctx context.Context, arg ListFilesForUserParams) ([]ListFilesForUserRow, error)
 	ListFilesSharedWithUser(ctx context.Context, arg ListFilesSharedWithUserParams) ([]File, error)
 	//---------------------------
 	ListFolderContents(ctx context.Context, arg ListFolderContentsParams) ([]ListFolderContentsRow, error)
@@ -45,12 +42,10 @@ type Querier interface {
 	ListRootContents(ctx context.Context, arg ListRootContentsParams) ([]ListRootContentsRow, error)
 	ListSelectableFolders(ctx context.Context, arg ListSelectableFoldersParams) ([]ListSelectableFoldersRow, error)
 	ListUsersWithAccessToFile(ctx context.Context, fileID uuid.UUID) ([]ListUsersWithAccessToFileRow, error)
-	UpdateBlobRefcount(ctx context.Context, arg UpdateBlobRefcountParams) error
 	UpdateFileFolder(ctx context.Context, arg UpdateFileFolderParams) error
 	UpdateFilename(ctx context.Context, arg UpdateFilenameParams) (File, error)
 	UpdateFolder(ctx context.Context, arg UpdateFolderParams) (UpdateFolderRow, error)
 	UpdateFolderParentFolder(ctx context.Context, arg UpdateFolderParentFolderParams) error
-	UserExists(ctx context.Context, id int64) (bool, error)
 	UserHasAccess(ctx context.Context, arg UserHasAccessParams) (bool, error)
 	UserOwnsBlob(ctx context.Context, arg UserOwnsBlobParams) (int32, error)
 }

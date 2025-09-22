@@ -19,7 +19,7 @@ type Config struct {
 	Redis    RedisConfig
 }
 
-// ServerConfig holds HTTP server settings.
+// ServerConfig holds HTTP server, rate limits, storage quota settings.
 type ServerConfig struct {
 	Port                   string
 	DefaultStorageQuota    int64
@@ -42,6 +42,7 @@ type MinioConfig struct {
 	Secure   bool
 }
 
+// RedisConfig holds Redis settings.
 type RedisConfig struct {
 	Addr     string
 	Password string

@@ -1,19 +1,14 @@
 - move cors to middleware
 
-
 (FEAT)
 - check mimetype
 - audit logs
 - password strength
 - chron job to check storage from time to time
 
-(BUG)
-- pagiation disappears when u set it too high
-- bulk reshare
-
 (MISC)
 - fix log statements with %v
 - move all backend types to a single place
 - remove useless queries
+- check if skeleton is blocking breadcrumbs
 
-files/repository  :138  -> should be in users

@@ -16,8 +16,8 @@ func AdminMiddleware(repo sqlc.Querier) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 
-			// This wont happen as AuthMiddleware runs before this,
-			// but we are checking just in case.
+			// This wont happen as AuthMiddleware runs before AdminMiddleware,
+			// but we check  just in case.
 			userID, ok := userctx.GetUserID(ctx)
 			if !ok {
 				errResponse := apierror.NewUnauthorizedError()

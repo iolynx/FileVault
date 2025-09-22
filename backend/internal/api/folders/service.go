@@ -3,7 +3,6 @@ package folders
 import (
 	"context"
 	"log"
-	"time"
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/apierror"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db/sqlc"
@@ -15,20 +14,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+// Service handles folder-related business logic, including creation, updating, deletion,
+// moving folders, and listing selectable folders.
 type Service struct {
 	repo    *Repository
 	storage storage.Storage
 }
 
+// NewService creates a new instance of the folder Service.
+// - repo: repository providing database operations for folders and files.
+// - storage: storage interface used for managing file blobs associated with folders.
 func NewService(repo *Repository, storage storage.Storage) *Service {
 	return &Service{repo: repo, storage: storage}
 }
 
-type CreateFolderRequest struct {
-	Name           string     `json:"name"`
-	ParentFolderID *uuid.UUID `json:"parent_folder_id"`
-}
-
+// CreateFolder creates a new folder for the authenticated user.
+// - Validates folder name is not empty.
+// - Validates the parent folder belongs to the user (if provided).
+// Returns the created folder or an error.
 func (s *Service) CreateFolder(ctx context.Context, req CreateFolderRequest) (sqlc.Folder, error) {
 	userID, ok := userctx.GetUserID(ctx)
 	if !ok {
@@ -61,18 +64,11 @@ func (s *Service) CreateFolder(ctx context.Context, req CreateFolderRequest) (sq
 	return s.repo.CreateFolder(ctx, params)
 }
 
-type UpdateFolderRequest struct {
-	Name string `json:"name"`
-}
-
-type FolderResponse struct {
-	ID           uuid.UUID `json:"id"`
-	Filename     string    `json:"filename"`
-	UploadedAt   time.Time `json:"uploaded_at"`
-	UserOwnsFile bool      `json:"user_owns_file"`
-	ItemType     string    `json:"item_type"`
-}
-
+// UpdateFolder renames a folder for the authenticated user.
+// - Validates user ownership of the folder.
+// - Returns an error if the folder is not found, the user does not own it, or the name is empty.
+// - Note: This only handles renaming; moving folders is not handled here.
+// Returns the updated folder as FolderResponse.
 func (s *Service) UpdateFolder(ctx context.Context, folderID uuid.UUID, req UpdateFolderRequest) (FolderResponse, error) {
 	userID, ok := userctx.GetUserID(ctx)
 	if !ok {
@@ -91,7 +87,6 @@ func (s *Service) UpdateFolder(ctx context.Context, folderID uuid.UUID, req Upda
 		return FolderResponse{}, apierror.NewBadRequestError("Folder name cannot be empty!")
 	}
 
-	// Note: This implementation only handles renaming, not moving.
 	params := sqlc.UpdateFolderParams{
 		ID:             folderID,
 		Name:           req.Name,
@@ -112,13 +107,10 @@ func (s *Service) UpdateFolder(ctx context.Context, folderID uuid.UUID, req Upda
 	}, nil
 }
 
-type Folder struct {
-	ID             uuid.UUID  `json:"id"`
-	Name           string     `json:"name"`
-	CreatedAt      time.Time  `json:"created_at"`
-	ParentFolderID *uuid.UUID `json:"parent_folder_id,omitempty"`
-}
-
+// GetSelectableFolders returns a list of folders that the authenticated user
+// can select (for moving files and folders). If folderID is provided, it
+// validates ownership of that folder, and uses the folderID to determine what folders are selectable.
+// Returns an error if the user is unauthorized or if the folder does not exist or is forbidden.
 func (s *Service) GetSelectableFolders(ctx context.Context, folderID *uuid.UUID) ([]Folder, error) {
 	userID, ok := userctx.GetUserID(ctx)
 	if !ok {
@@ -159,6 +151,11 @@ func (s *Service) GetSelectableFolders(ctx context.Context, folderID *uuid.UUID)
 	return folders, nil
 }
 
+// DeleteFolder deletes a folder and all its contents from the database and storage.
+// - Validates user ownership of the folder.
+// - Deletes subfolders and file records automatically via ON DELETE CASCADE.
+// - Checks all blobs in the folder hierarchy for cleanup and deletes unreferenced blobs from storage.
+// Returns an error if the user is unauthorized, the folder does not exist, or deletion fails.
 func (s *Service) DeleteFolder(ctx context.Context, folderID uuid.UUID) error {
 	ownerID, ok := userctx.GetUserID(ctx)
 	if !ok {
@@ -210,10 +207,10 @@ func (s *Service) DeleteFolder(ctx context.Context, folderID uuid.UUID) error {
 	return nil
 }
 
-type UpdateFolderParentRequest struct {
-	TargetFolderID *uuid.UUID `json:"target_folder_id"`
-}
-
+// UpdateFolderParent updates the parent folder of the specified folder.
+// - Validates that the authenticated user owns both the folder and the target parent (if provided).
+// - Moves the folder under the new parent or to root if TargetFolderID is nil.
+// Returns an error if the user is unauthorized, the folder or target parent is forbidden, or if the operation fails.
 func (s *Service) UpdateFolderParent(ctx context.Context, folderID uuid.UUID, req UpdateFolderParentRequest) error {
 	userID, ok := userctx.GetUserID(ctx)
 	if !ok {

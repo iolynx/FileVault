@@ -13,21 +13,8 @@ SELECT * FROM blobs WHERE sha256 = $1 LIMIT 1;
 -- name: GetBlobByID :one
 SELECT * FROM blobs WHERE id = $1;
 
--- name: UpdateBlobRefcount :exec
-UPDATE blobs SET refcount = refcount + $2 WHERE id = $1;
-
 -- name: UserOwnsBlob :one
 SELECT 1 FROM files WHERE owner_id = $1 AND blob_id = $2 LIMIT 1;
-
--- name: IncrementBlobRefcount :one
-UPDATE blobs SET refcount = refcount + 1
-WHERE id = $1
-RETURNING refcount;
-
--- name: DecrementBlobRefcount :one
-UPDATE blobs SET refcount = refcount - 1
-WHERE id = $1
-RETURNING refcount;
 
 -- name: DeleteBlobIfUnused :one
 DELETE FROM blobs 
@@ -89,16 +76,6 @@ UPDATE files
 SET folder_id = $1
 WHERE id = $2;
 
-
--- name: ListFilesSharedWithUser :many
-SELECT f.*
-FROM files f
-JOIN file_shares fs ON f.id = fs.file_id
-WHERE fs.shared_with = $1
-  AND ($2 = '' OR f.filename ILIKE '%' || $2 || '%')
-ORDER BY f.uploaded_at DESC
-LIMIT $3 OFFSET $4;
-
 -- name: UserHasAccess :one
 SELECT EXISTS (
   SELECT 1
@@ -122,31 +99,6 @@ WHERE file_id = $1;
 -- name: AddSharesToFile :copyfrom
 INSERT INTO file_shares (file_id, shared_with)
 VALUES ($1, $2);
-
--- name: ListFilesForUser :many
-SELECT DISTINCT 
-    f.id,
-    f.filename,
-    f.size,
-    f.declared_mime AS content_type,
-    f.uploaded_at,
-    (f.owner_id = sqlc.arg(user_id)) AS user_owns_file,
-    f.download_count
-FROM files f
-LEFT JOIN file_shares fs ON f.id = fs.file_id
-WHERE 
-    (f.owner_id = sqlc.arg(user_id) OR fs.shared_with = sqlc.arg(user_id))
-    AND (sqlc.arg(filename)::TEXT = '' OR f.filename ILIKE '%' || sqlc.arg(filename)::TEXT || '%')
-    AND (sqlc.arg(mime_type)::TEXT = '' OR f.declared_mime = sqlc.arg(mime_type)::TEXT)
-    AND (sqlc.arg(uploaded_after)::TIMESTAMPTZ IS NULL OR f.uploaded_at > sqlc.arg(uploaded_after)::TIMESTAMPTZ)
-    AND (sqlc.arg(uploaded_before)::TIMESTAMPTZ IS NULL OR f.uploaded_at < sqlc.arg(uploaded_before)::TIMESTAMPTZ)
-    AND (
-        sqlc.arg(ownership_status)::int = 0
-        OR (sqlc.arg(ownership_status)::int = 1 AND f.owner_id = sqlc.arg(user_id))
-        OR (sqlc.arg(ownership_status)::int = 2 AND f.owner_id <> sqlc.arg(user_id))
-    )
-ORDER BY f.uploaded_at DESC
-LIMIT $1 OFFSET $2;
 
 -----------------------------
 

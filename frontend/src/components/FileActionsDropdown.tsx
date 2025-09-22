@@ -30,6 +30,30 @@ interface ActionsDropDownProps {
 	onFileChange: () => void;
 }
 
+/**
+ * Props for FileActionsDropdown
+ * 
+ * @typedef {Object} ActionsDropDownProps
+ * @property {ContentItem} file - The file or folder item the dropdown actions will operate on
+ * @property {() => void} onFileChange - Callback triggered when an action modifies the file (e.g., rename, delete)
+ */
+
+/**
+ * FileActionsDropdown component
+ * 
+ * Renders a dropdown menu with actions that can be performed on a file, Including:
+ * - Download
+ * - Rename
+ * - Delete
+ * - Move
+ * - Share
+ * - Info
+ * 
+ * @param {ActionsDropDownProps} props - Component props
+ * @returns {JSX.Element} JSX element rendering the file actions dropdown
+ * 
+ * @component
+ */
 export default function FileActionsDropdown({ file, onFileChange }: ActionsDropDownProps) {
 	const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false)
 	const [isRenameDialogOpen, setRenameDialogOpen] = useState(false)
@@ -43,6 +67,17 @@ export default function FileActionsDropdown({ file, onFileChange }: ActionsDropD
 	const { fetchUser } = useAuthStore();
 	const { path, fetchContents } = useContentStore();
 
+
+	/**
+	 * Fetches share information for the file.
+	 * - Retrieves the list of users the file is already shared with
+	 * - Sets default values for the share dialog
+	 * - Retrieves the file's share URL
+	 * - Retrieves the list of all possible users the file can be shared with
+	 * 
+	 * @async
+	 * @function
+	 */
 	const fetchShareInfo = async () => {
 		try {
 			const res = await api.get(`/files/${file.id}/share-info`,
@@ -70,6 +105,16 @@ export default function FileActionsDropdown({ file, onFileChange }: ActionsDropD
 		}
 	}, [isShareDialogOpen])
 
+
+	/**
+	 * Deletes the current file.
+	 * - Sends DELETE request to API
+	 * - Shows success or error toast notifications
+	 * - Updates the UI by removing the deleted file (without refetch)
+	 * 
+	 * @async
+	 * @function
+	 */
 	const handleDelete = async () => {
 		try {
 			const res = await api.delete(`/files/${file.id}`, { withCredentials: true });
@@ -86,6 +131,16 @@ export default function FileActionsDropdown({ file, onFileChange }: ActionsDropD
 		}
 	}
 
+
+	/**
+	 * Downloads the current file.
+	 * - Sends GET request to API for file blob
+	 * - Creates a temporary link to trigger download
+	 * - Shows success or error toast notifications
+	 * 
+	 * @async
+	 * @function
+	 */
 	const handleDownload = async () => {
 		try {
 			const res = await api.get(`/files/${file.id}`, {
@@ -108,6 +163,16 @@ export default function FileActionsDropdown({ file, onFileChange }: ActionsDropD
 		}
 	}
 
+	/**
+	 * Renames the current file.
+	 * - Sends PATCH request with new filename
+	 * - Updates UI via `renameItem` callback
+	 * - Shows success or error toast notifications
+	 *
+	 * @async
+	 * @function
+	 * @param {string} newFilename - The new filename for the file
+	 */
 	const handleRename = async (newFilename: string) => {
 		try {
 			if (newFilename === "") {
@@ -126,7 +191,15 @@ export default function FileActionsDropdown({ file, onFileChange }: ActionsDropD
 		}
 	}
 
-	// sequential sharing for now, TODO: creat an endpoint that can accept users in bulk
+	/**
+	 * Shares the current file with selected users.
+	 * - Sends PUT request to API to update file shares
+	 * - Shows success or error toast notifications
+	 * 
+	 * @async
+	 * @function
+	 * @param {string[]} selectedUsers - Array of user IDs (as strings) to share the file with
+	 */
 	const handleShare = async (selectedUsers: string[]) => {
 		try {
 			const userIdsAsNumbers = selectedUsers.map(id => parseInt(id, 10))

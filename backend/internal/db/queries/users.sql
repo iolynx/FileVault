@@ -9,11 +9,6 @@ SELECT * FROM users WHERE email = $1;
 -- name: GetUserByID :one
 SELECT * FROM users WHERE id = $1;
 
--- name: UserExists :one
-SELECT EXISTS(
-    SELECT 1 FROM users WHERE id = $1
-);
-
 -- name: ListOtherUsers :many
 SELECT id, email, name
 FROM users

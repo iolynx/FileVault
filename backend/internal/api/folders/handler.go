@@ -1,3 +1,5 @@
+// Package folders provides database operations for file and folder management,
+// including fetching, creating, and moving folders.
 package folders
 
 import (
@@ -12,14 +14,17 @@ import (
 	"github.com/google/uuid"
 )
 
+// Handler is the HTTP handler for folder-related endpoints.
 type Handler struct {
 	service *Service
 }
 
+// NewHandler creates a new folder Handler with the given service.
 func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
+// RegisterRoutes registers all folder-related HTTP routes on the given router.
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/folders", apphandler.MakeHTTPHandler(h.CreateFolder))
 	r.Patch("/folders/{folderId}", apphandler.MakeHTTPHandler(h.UpdateFolder))
@@ -29,6 +34,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/folders/", apphandler.MakeHTTPHandler(h.GetSelectableFolders))
 }
 
+// CreateFolder handles POST /folders.
+// It creates a new folder for the authenticated user.
 func (h *Handler) CreateFolder(w http.ResponseWriter, r *http.Request) error {
 	var req CreateFolderRequest
 
@@ -45,6 +52,8 @@ func (h *Handler) CreateFolder(w http.ResponseWriter, r *http.Request) error {
 	return util.WriteJSON(w, http.StatusCreated, folder)
 }
 
+// UpdateFolder handles PATCH /folders/{folderId}.
+// It updates the folder's metadata, such as its name.
 func (h *Handler) UpdateFolder(w http.ResponseWriter, r *http.Request) error {
 	folderIDStr := chi.URLParam(r, "folderId")
 	folderID, err := uuid.Parse(folderIDStr)
@@ -65,6 +74,9 @@ func (h *Handler) UpdateFolder(w http.ResponseWriter, r *http.Request) error {
 	return util.WriteJSON(w, http.StatusOK, updatedFolder)
 }
 
+// DeleteFolder handles DELETE /folders/{folderId}.
+// It deletes the specified folder along with its contents,
+// including files and subfolders, recursively.
 func (h *Handler) DeleteFolder(w http.ResponseWriter, r *http.Request) error {
 	folderIDStr := chi.URLParam(r, "folderId")
 	folderID, err := uuid.Parse(folderIDStr)
@@ -81,6 +93,8 @@ func (h *Handler) DeleteFolder(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// MoveFolder handles PATCH /folders/{id}/move.
+// It updates the parent folder of a folder, effectively moving it.
 func (h *Handler) MoveFolder(w http.ResponseWriter, r *http.Request) error {
 	folderIDStr := chi.URLParam(r, "id")
 	folderID, err := uuid.Parse(folderIDStr)
@@ -96,6 +110,11 @@ func (h *Handler) MoveFolder(w http.ResponseWriter, r *http.Request) error {
 	return h.service.UpdateFolderParent(r.Context(), folderID, req)
 }
 
+// GetSelectableFolders handles GET /folders/{id} and GET /folders/.
+// It returns folders that the authenticated user move their folder to.
+// This includes the set of all folders the user owns, with the exception
+// of the folder itself and its parent (if any).
+// The GET/folders/ endpoint is used when the parent folder is null (root).
 func (h *Handler) GetSelectableFolders(w http.ResponseWriter, r *http.Request) error {
 	folderIDStr := chi.URLParam(r, "id")
 	var folderID *uuid.UUID

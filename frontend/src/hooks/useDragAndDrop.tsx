@@ -5,6 +5,23 @@ interface DragAndDropOptions {
 	onDrop: (files: File[]) => void;
 }
 
+/**
+ * Options for useDragAndDrop hook
+ * 
+ * @typedef {Object} DragAndDropOptions
+ * @property {(files: File[]) => void} onDrop - Callback invoked when files are dropped
+ */
+
+/**
+ * Custom React hook to handle drag-and-drop file uploads.
+ * - Tracks whether files are currently being dragged over the window
+ * - Calls the provided `onDrop` callback with dropped files
+ * - Handles `dragenter`, `dragover`, `dragleave`, and `drop` events
+ * - Uses preventDefault() and stopPropagation() to stop the event from propagating outwards.
+ * 
+ * @param {DragAndDropOptions} options - Options for the hook
+ * @returns {{ isDragging: boolean }} - Object containing drag state
+ */
 export const useDragAndDrop = ({ onDrop }: DragAndDropOptions) => {
 	const [isDragging, setIsDragging] = useState(false);
 

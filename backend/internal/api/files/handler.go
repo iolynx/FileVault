@@ -17,14 +17,17 @@ import (
 	"github.com/google/uuid"
 )
 
+// FileHandler handles HTTP requests related to file operations.
 type FileHandler struct {
 	service *Service
 }
 
+// NewFileHandler creates a new FileHandler with the given file service.
 func NewFileHandler(service *Service) *FileHandler {
 	return &FileHandler{service: service}
 }
 
+// RegisterRoutes registers all file-related HTTP routes on the given router.
 func (h *FileHandler) RegisterRoutes(r chi.Router) {
 	r.Post("/files/upload", apphandler.MakeHTTPHandler(h.Upload))
 
@@ -40,6 +43,8 @@ func (h *FileHandler) RegisterRoutes(r chi.Router) {
 	r.Put("/files/{id}/shares", apphandler.MakeHTTPHandler(h.UpdateFileShares))
 }
 
+// Upload processes one or multiple files uploaded via
+// multipart/form-data and saves them to storage and database.
 func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) error {
 	err := r.ParseMultipartForm(10 << 20)
 	if err != nil {
@@ -86,6 +91,7 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) error {
 	})
 }
 
+// GetURL handles returning of the public or presigned URL for accessing a file given its UUID.
 func (h *FileHandler) GetURL(w http.ResponseWriter, r *http.Request) error {
 	fileID := chi.URLParam(r, "id")
 	if fileID == "" {
@@ -102,6 +108,8 @@ func (h *FileHandler) GetURL(w http.ResponseWriter, r *http.Request) error {
 	})
 }
 
+// DownloadFile streams the requested file to the client,
+// ensuring access control and updating the download count.
 func (h *FileHandler) DownloadFile(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	fileID := uuid.MustParse(chi.URLParam(r, "id"))
@@ -122,6 +130,9 @@ func (h *FileHandler) DownloadFile(w http.ResponseWriter, r *http.Request) error
 	return err
 }
 
+// ListContents handles requests to retrieve a paginated list of files and folders,
+// supporting filtering by folder, MIME type, upload date, size, ownership, and sorting.
+// This is the main handler that returns the content data to the users.
 func (h *FileHandler) ListContents(w http.ResponseWriter, r *http.Request) error {
 	req := ListContentsRequest{
 		Search:   r.URL.Query().Get("search"),
@@ -196,6 +207,8 @@ func (h *FileHandler) ListContents(w http.ResponseWriter, r *http.Request) error
 	return util.WriteJSON(w, http.StatusOK, contents)
 }
 
+// DeleteFile handles requests to delete a file by its UUID, performing ownership checks
+// and removing it from both storage and the database.
 func (h *FileHandler) DeleteFile(w http.ResponseWriter, r *http.Request) error {
 	fileID := chi.URLParam(r, "id")
 	if fileID == "" {
@@ -212,10 +225,8 @@ func (h *FileHandler) DeleteFile(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-type UpdateFilenameRequest struct {
-	Filename string `json:"name"`
-}
-
+// UpdateFilename handles requests to rename an existing file, validating input
+// and returning the updated file metadata on success.
 func (h *FileHandler) UpdateFilename(w http.ResponseWriter, r *http.Request) error {
 	id := chi.URLParam(r, "id")
 
@@ -240,22 +251,8 @@ func (h *FileHandler) UpdateFilename(w http.ResponseWriter, r *http.Request) err
 	return util.WriteJSON(w, http.StatusOK, file)
 }
 
-type ListAllFilesResponse struct {
-	ID            string    `json:"id"`
-	Filename      string    `json:"filename"`
-	Size          int64     `json:"size"`
-	DeclaredMime  string    `json:"declared_mime"`
-	UploadedAt    time.Time `json:"uploaded_at"`
-	DownloadCount *int64    `json:"download_count,omitempty"`
-	OwnerID       int64     `json:"owner_id"`
-	OwnerEmail    string    `json:"owner_email"`
-}
-
-type PaginatedFilesResponse struct {
-	Data       []ListAllFilesResponse `json:"data"`
-	TotalCount int64                  `json:"totalCount"`
-}
-
+// ListAllFiles handles requests to retrieve a paginated list of all files in the system,
+// supporting sorting by filename, size, or upload date.
 func (h *FileHandler) ListAllFiles(w http.ResponseWriter, r *http.Request) error {
 	limit := util.ParseInt32OrDefault(r.URL.Query().Get("limit"), 50)
 	offset := util.ParseInt32OrDefault(r.URL.Query().Get("offset"), 0)
@@ -328,10 +325,8 @@ func (h *FileHandler) GetShareInfo(w http.ResponseWriter, r *http.Request) error
 	return util.WriteJSON(w, http.StatusOK, shareInfo)
 }
 
-type MoveFileRequest struct {
-	TargetFolderID *uuid.UUID `json:"target_folder_id"`
-}
-
+// MoveFile handles requests to move a file to a different folder,
+// validating the file ID and request payload.
 func (h *FileHandler) MoveFile(w http.ResponseWriter, r *http.Request) error {
 	fileIDStr := chi.URLParam(r, "id")
 	fileID, err := uuid.Parse(fileIDStr)
@@ -349,10 +344,9 @@ func (h *FileHandler) MoveFile(w http.ResponseWriter, r *http.Request) error {
 	return h.service.MoveFile(r.Context(), fileID, req)
 }
 
-type updateSharesPayload struct {
-	UserIDs []int64 `json:"user_ids"`
-}
-
+// UpdateFileShares handles requests to update file sharing settings,
+// allowing the owner to modify which users have access.
+// This is done in one atomic action to ensure database consistency.
 func (h *FileHandler) UpdateFileShares(w http.ResponseWriter, r *http.Request) error {
 	fileID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {

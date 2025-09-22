@@ -1,6 +1,10 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
 
+
+/**
+ * FileSkeleton: Displays a skeleton component when the data is being fetched
+ */
 export default function FilesSkeleton() {
 	return (
 		<div className="flex flex-col p-0 m-0">

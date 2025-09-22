@@ -13,6 +13,9 @@ import (
 )
 
 // RateLimiter creates a middleware that enforces rate limits per user.
+// It uses the environment variables `API_RATE_LIMIT=2` and  `API_RATE_LIMIT_WINDOW_SECONDS=1`
+// to enforce configurable rate limiting, and returns a 429 StatusTooManyRequests upon
+// exceeding the allowed number of requests within the configured time window.
 func RateLimiter(redisClient *redis.Client, limit int, window time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

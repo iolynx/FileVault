@@ -1,6 +1,20 @@
 'use client';
 import { useContentStore } from '@/stores/useContentStore';
 
+/**
+ * Breadcrumbs component
+ * 
+ * Renders a navigable breadcrumb trail for the current folder path.
+ * Allows users to quickly navigate to any parent folder by clicking on its name.
+ * 
+ * Uses the `useContentStore` hook to:
+ * - Access the current folder path
+ * - Navigate to a specific folder in the path
+ * 
+ * @returns {JSX.Element} JSX element rendering the breadcrumb navigation
+ * 
+ * @component
+ */
 export function Breadcrumbs() {
 	const { path, navigateToPathIndex } = useContentStore();
 

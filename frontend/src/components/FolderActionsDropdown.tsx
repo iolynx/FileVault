@@ -25,6 +25,30 @@ interface ActionsDropDownProps {
 	onFolderChange: () => void;
 }
 
+
+/**
+ * Props for FolderActionsDropdown
+ * 
+ * @typedef {Object} ActionsDropDownProps
+ * @property {ContentItem} folder - The file or folder item the dropdown actions will operate on
+ * @property {() => void} onFolderChange - Callback triggered when an action modifies the file (e.g., rename, delete)
+ */
+
+/**
+ * FolderActionsDropdown component
+ * 
+ * Renders a dropdown menu with actions that can be performed on a folder, Including:
+ * - Rename
+ * - Delete
+ * - Move
+ * - Info
+ * 
+ * @param {ActionsDropDownProps} props - Component props
+ * @returns {JSX.Element} JSX element rendering the file actions dropdown
+ * 
+ * @component
+ */
+
 export default function FolderActionsDropdown({ folder, onFolderChange }: ActionsDropDownProps) {
 	const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false)
 	const [isRenameDialogOpen, setRenameDialogOpen] = useState(false)
@@ -34,6 +58,15 @@ export default function FolderActionsDropdown({ folder, onFolderChange }: Action
 	const { fetchUser } = useAuthStore();
 	const { path } = useContentStore();
 
+	/**
+	 * Deletes the current folder.
+	 * - Sends DELETE request to API
+	 * - Shows success or error toast notifications
+	 * - Updates the UI by removing the deleted folder and refreshing user data
+	 * 
+	 * @async
+	 * @function
+	 */
 	const handleDelete = async () => {
 		try {
 			const res = await api.delete(`/folders/${folder.id}`, { withCredentials: true });
@@ -50,6 +83,16 @@ export default function FolderActionsDropdown({ folder, onFolderChange }: Action
 		}
 	}
 
+	/**
+	 * Renames the current folder.
+	 * - Sends PATCH request with new folder name
+	 * - Updates UI via `renameItem` callback
+	 * - Shows success or error toast notifications
+	 * 
+	 * @async
+	 * @function
+	 * @param {string} newFolderName - The new name for the folder
+	 */
 	const handleRename = async (newFolderName: string) => {
 		try {
 			if (newFolderName === "") {

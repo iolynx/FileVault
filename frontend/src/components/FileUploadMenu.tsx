@@ -22,17 +22,51 @@ interface FileUploadMenuProps {
 	onActionComplete: () => void;
 	currentFolderID: string | null;
 }
+
+/**
+ * Props for FileUploadMenu
+ * 
+ * @typedef {Object} FileUploadMenuProps
+ * @property {() => void} onActionComplete - Callback to trigger when an upload or folder creation completes
+ * @property {string | null} currentFolderID - The ID of the current folder where files/folders will be uploaded
+ */
+
+/**
+ * FileUploadMenu component
+ * 
+ * Provides UI and functionality for uploading files and creating new folders.
+ * 
+ * Features:
+ * - Upload files to the current folder
+ * - Create a new folder in the current folder
+ * - Handles upload completion via callback
+ * - Displays toast notifications for success/error
+ * 
+ * @param {FileUploadMenuProps} props - Component props
+ * @returns {JSX.Element} JSX element rendering the file upload menu
+ * 
+ * @component
+ */
 export function FileUploadMenu({ onActionComplete, currentFolderID }: FileUploadMenuProps) {
+	/** Reference to the hidden file input element */
 	const inputRef = useRef<HTMLInputElement>(null);
 
 	const [isFolderModalOpen, setFolderModalOpen] = useState(false);
 	const [newFolderName, setNewFolderName] = useState('');
 	const [isCreating, setIsCreating] = useState(false);
 
+
+	/** 
+	 * Uses uploadFiles from the useFileUploader hook to upload files
+	 */
 	const { uploadFiles } = useFileUploader({
 		onUploadComplete: onActionComplete,
 	})
 
+	/**
+	 * Handles the file input change event and uploads selected files.
+	 * @param {React.ChangeEvent<HTMLInputElement>} event - Change event from the file input
+	 */
 	const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
 		const files = event.target.files;
 		if (files && files.length > 0) {
@@ -40,6 +74,10 @@ export function FileUploadMenu({ onActionComplete, currentFolderID }: FileUpload
 		}
 	};
 
+	/**
+	 * Creates a new folder with the provided name in the current folder.
+	 * Shows success/error toast notifications.
+	 */
 	const handleCreateFolder = async () => {
 		if (!newFolderName.trim()) {
 			toast.error("Folder name cannot be empty.");

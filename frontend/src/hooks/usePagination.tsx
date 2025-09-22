@@ -15,7 +15,25 @@ interface UsePaginationProps {
 	siblingCount?: number;
 	currentPage: number;
 }
+/**
+ * Props for usePagination hook
+ * 
+ * @typedef {Object} UsePaginationProps
+ * @property {number} totalCount - Total number of items in the dataset
+ * @property {number} pageSize - Number of items per page
+ * @property {number} [siblingCount=1] - Number of sibling page numbers to display on each side of the current page
+ * @property {number} currentPage - The current 1-based page number
+ */
 
+/**
+ * Custom React hook to compute pagination ranges.
+ * - Calculates an array of page numbers to display in a pagination component
+ * - Supports dynamic sibling count around the current page
+ * - Can be used to render previous/next buttons and page numbers
+ * 
+ * @param {UsePaginationProps} props - Options for pagination
+ * @returns {(Array<number | string>)} - Array of page numbers or string placeholders (e.g., '...')
+ */
 export const usePagination = ({
 	totalCount,
 	pageSize,

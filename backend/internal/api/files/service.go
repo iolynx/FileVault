@@ -4,14 +4,12 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
 	"mime/multipart"
 	"net/http"
-	"time"
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/apierror"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/folders"
@@ -25,6 +23,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+// Service provides file-related operations, including uploading and managing files,
+// managing file metadata, and interacting with storage and related repositories.
 type Service struct {
 	userRepo   *users.Repository
 	folderRepo *folders.Repository
@@ -32,34 +32,7 @@ type Service struct {
 	storage    storage.Storage
 }
 
-type File struct {
-	ID            uuid.UUID `json:"id"`
-	Filename      string    `json:"filename"`
-	Size          int64     `json:"size"`
-	ContentType   string    `json:"content_type"`
-	UploadedAt    time.Time `json:"uploaded_at"`
-	UserOwnsFile  bool      `json:"user_owns_file"`
-	DownloadCount *int64    `json:"download_count,omitempty"`
-}
-
-type FileResponse struct {
-	ID            uuid.UUID `json:"id"`
-	Filename      string    `json:"filename"`
-	Size          int64     `json:"size"`
-	ContentType   string    `json:"content_type"`
-	UploadedAt    time.Time `json:"uploaded_at"`
-	UserOwnsFile  bool      `json:"user_owns_file"`
-	DownloadCount *int64    `json:"download_count,omitempty"`
-	ItemType      string    `json:"item_type"`
-}
-
-type User struct {
-	ID         int64  `json:"id"`
-	Name       string `json:"name"`
-	Email      string `json:"email"`
-	Permission string `json:"permission"`
-}
-
+// NewService constructs a new Service instance with the provided repositories and storage.
 func NewService(filesRepo *Repository, userRepo *users.Repository, folderRepo *folders.Repository, storage storage.Storage) *Service {
 	return &Service{
 		repo:       filesRepo,
@@ -69,6 +42,10 @@ func NewService(filesRepo *Repository, userRepo *users.Repository, folderRepo *f
 	}
 }
 
+// UploadFile handles uploading a file to the storage backend and creating
+// the corresponding database records. It performs ownership checks, computes
+// a SHA-256 hash for deduplication, and updates blob reference counts (using a database trigger).
+// Returns the created File record or an error.
 func (s *Service) UploadFile(ctx context.Context, file multipart.File, header *multipart.FileHeader, folderID *uuid.UUID) (sqlc.File, error) {
 	// Ownership checks
 	ownerID, ok := userctx.GetUserID(ctx)
@@ -126,7 +103,7 @@ func (s *Service) UploadFile(ctx context.Context, file multipart.File, header *m
 		}
 		log.Print("Uploaded Blob to storage")
 
-		// Create blob record in DB with refcount=0. The trigger will increment it.
+		// Create blob record in DB with refcount = 0 (default). The trigger will increment it.
 		blobParams := sqlc.CreateBlobParams{
 			Sha256:      sha,
 			StoragePath: storagePath,
@@ -152,33 +129,13 @@ func (s *Service) UploadFile(ctx context.Context, file multipart.File, header *m
 		fileParams.FolderID = pgtype.UUID{Bytes: *folderID, Valid: true}
 	}
 
+	// Create the file record, which triggers blob refcount update
 	log.Println("Creating file record with params:", fileParams)
 	return s.repo.CreateFile(ctx, fileParams)
 }
 
-// ListFiles returns a list of files owned by a particular User
-func (s *Service) ListFilesByOwner(ctx context.Context, ownerID int64, search string, limit, offset int32) ([]File, error) {
-	fileRows, err := s.repo.ListFilesByOwner(ctx, ownerID, search, limit, offset)
-	if err != nil {
-		return []File{}, err
-	}
-
-	files := make([]File, 0, len(fileRows))
-	for _, r := range fileRows {
-		files = append(files, File{
-			ID:            r.ID,
-			Filename:      r.Filename,
-			Size:          r.Size,
-			ContentType:   r.ContentType.String,
-			UploadedAt:    r.UploadedAt.Time,
-			UserOwnsFile:  true,
-			DownloadCount: &r.DownloadCount.Int64,
-		})
-	}
-
-	return files, nil
-}
-
+// GetFileURL returns a signed URL for accessing the file identified by fileID.
+// It ensures the requesting user owns the file and fetches the corresponding blob from storage.
 func (s *Service) GetFileURL(ctx context.Context, fileID uuid.UUID) (string, error) {
 	userID, ok := userctx.GetUserID(ctx)
 	if !ok {
@@ -190,6 +147,7 @@ func (s *Service) GetFileURL(ctx context.Context, fileID uuid.UUID) (string, err
 		return "", err
 	}
 
+	// Ownership check
 	if file.OwnerID != userID {
 		return "", apierror.NewForbiddenError()
 	}
@@ -202,10 +160,13 @@ func (s *Service) GetFileURL(ctx context.Context, fileID uuid.UUID) (string, err
 	return s.storage.GetBlobURL(ctx, blob.StoragePath)
 }
 
+// GetFileByUUID retrieves a file record from the database by its UUID.
 func (s *Service) GetFileByUUID(ctx context.Context, fileID uuid.UUID) (sqlc.File, error) {
 	return s.repo.GetFileByUUID(ctx, fileID)
 }
 
+// DownloadFile returns a ReadCloser for the file content along with its filename.
+// It checks if the user owns or has access to the file and fetches the corresponding blob.
 func (s *Service) DownloadFile(ctx context.Context, fileID uuid.UUID) (io.ReadCloser, string, error) {
 
 	ownerID, ok := userctx.GetUserID(ctx)
@@ -235,6 +196,9 @@ func (s *Service) DownloadFile(ctx context.Context, fileID uuid.UUID) (io.ReadCl
 	return blobReader, file.Filename, nil
 }
 
+// DeleteFile deletes a file record and its associated blob from storage if no other references exist.
+// The blob record's refcount is automatically decremented and deleted through a database trigger.
+// Only the owner of the file can perform this action.
 func (s *Service) DeleteFile(ctx context.Context, fileID uuid.UUID) error {
 	userID, ok := userctx.GetUserID(ctx)
 	if !ok {
@@ -279,6 +243,8 @@ func (s *Service) DeleteFile(ctx context.Context, fileID uuid.UUID) error {
 	return nil
 }
 
+// GetBlobReader returns a ReadCloser for the blob content corresponding to the given file.
+// It fetches the blob from storage using the blob's storage path.
 func (s *Service) GetBlobReader(ctx context.Context, file sqlc.File) (io.ReadCloser, error) {
 	blob, err := s.repo.GetBlobByID(ctx, file.BlobID)
 	blobFileName := blob.StoragePath
@@ -292,6 +258,9 @@ func (s *Service) GetBlobReader(ctx context.Context, file sqlc.File) (io.ReadClo
 	return obj, nil
 }
 
+// UpdateFilename renames a file owned by the current user.
+// Returns the updated FileResponse or an error if the user
+// is unauthorized, forbidden, or the update fails.
 func (s *Service) UpdateFilename(ctx context.Context, newFilename string, fileID uuid.UUID) (FileResponse, error) {
 	userID, ok := userctx.GetUserID(ctx)
 	if !ok {
@@ -303,6 +272,7 @@ func (s *Service) UpdateFilename(ctx context.Context, newFilename string, fileID
 		return FileResponse{}, err
 	}
 
+	// Ownership check
 	if file.OwnerID != userID {
 		return FileResponse{}, apierror.NewForbiddenError()
 	}
@@ -327,28 +297,11 @@ func (s *Service) UpdateFilename(ctx context.Context, newFilename string, fileID
 
 }
 
-func (s *Service) ListFilesSharedWithUser(ctx context.Context, userID int64, search string, limit, offset int32) ([]File, error) {
-	fileRows, err := s.repo.ListFilesSharedWithUser(ctx, userID, search, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-
-	files := make([]File, 0, len(fileRows))
-	for _, r := range fileRows {
-		files = append(files, File{
-			ID:           r.ID,
-			Filename:     r.Filename,
-			Size:         r.Size,
-			ContentType:  r.DeclaredMime.String,
-			UploadedAt:   r.UploadedAt.Time,
-			UserOwnsFile: false,
-		})
-	}
-
-	return files, nil
-}
-
-func (s *Service) ListUsersWithAccesToFile(ctx context.Context, fileID uuid.UUID) ([]User, error) {
+// ListUsersWithAccesToFile returns all users who currently
+// have access to a given file, this includes the owner,
+// and the users the file is shared with.
+// Returns a slice of User or an error if the caller lacks access.
+func (s *Service) ListUsersWithAccessToFile(ctx context.Context, fileID uuid.UUID) ([]User, error) {
 	userID, ok := userctx.GetUserID(ctx)
 	if !ok {
 		return nil, apierror.NewUnauthorizedError()
@@ -378,37 +331,9 @@ func (s *Service) ListUsersWithAccesToFile(ctx context.Context, fileID uuid.UUID
 	return usersWithAccess, nil
 }
 
-type ContentItem struct {
-	ID            uuid.UUID `json:"id"`
-	ItemType      string    `json:"item_type"` // "file" or "folder"
-	Filename      string    `json:"filename"`
-	Size          *int64    `json:"size,omitempty"`
-	ContentType   *string   `json:"content_type,omitempty"`
-	UploadedAt    time.Time `json:"uploaded_at"`
-	UserOwnsFile  bool      `json:"user_owns_file"`
-	DownloadCount *int64    `json:"download_count,omitempty"`
-}
-
-type ListContentsRequest struct {
-	FolderID        *uuid.UUID    `json:"folder_id"`
-	Search          string        `json:"search"`
-	MimeType        string        `json:"content_type"`
-	UploadedAfter   *time.Time    `json:"uploaded_after"`
-	UploadedBefore  *time.Time    `json:"uploaded_before"`
-	OwnershipStatus int32         `json:"user_owns_file"`
-	Limit           int32         `json:"limit"`
-	Offset          int32         `json:"offset"`
-	MinSize         sql.NullInt64 `json:"min_size"`
-	MaxSize         sql.NullInt64 `json:"max_size"`
-	SortBy          string        `json:"sort_by"`
-	SortOrder       string        `json:"sort_order"`
-}
-
-type ListContentsResponse struct {
-	Data       []ContentItem `json:"data"`
-	TotalCount int64         `json:"totalCount"`
-}
-
+// ListContents retrieves files and folders for the authenticated user,
+// either within a specified folder or at the root. It applies filters,
+// pagination, and sorting as specified in the request.
 func (s *Service) ListContents(ctx context.Context, req ListContentsRequest) (ListContentsResponse, error) {
 	userID, ok := userctx.GetUserID(ctx)
 	if !ok {
@@ -488,8 +413,8 @@ func (s *Service) ListContents(ctx context.Context, req ListContentsRequest) (Li
 	return response, nil
 }
 
-// Helper function to map the generated sqlc rows to ContentItem,
-// which is the standardized way to represent Content (files / folders)
+// mapListFolderContentsRows converts sqlc folder-content rows
+// into standardized ContentItem structs for API responses.
 func mapListFolderContentsRows(rows []sqlc.ListFolderContentsRow) []ContentItem {
 	items := make([]ContentItem, len(rows))
 	for i, r := range rows {
@@ -515,8 +440,8 @@ func mapListFolderContentsRows(rows []sqlc.ListFolderContentsRow) []ContentItem 
 	return items
 }
 
-// Helper function to map the generated sqlc rows to ContentItem,
-// which is the standardized way to represent Content (files / folders)
+// mapListRootContentsRows converts sqlc root-content rows
+// into standardized ContentItem structs for API responses.
 func mapListRootContentsRows(rows []sqlc.ListRootContentsRow) []ContentItem {
 	items := make([]ContentItem, len(rows))
 	for i, r := range rows {
@@ -543,10 +468,14 @@ func mapListRootContentsRows(rows []sqlc.ListRootContentsRow) []ContentItem {
 	return items
 }
 
+// IncrementDownloadCount increments the download counter
+// for the given file in the database.
 func (s *Service) IncrementDownloadCount(ctx context.Context, fileID uuid.UUID) error {
 	return s.repo.IncrementDownloadCount(ctx, fileID)
 }
 
+// ListAllFiles retrieves all files across the system with
+// pagination and sorting, primarily for admin use.
 func (s *Service) ListAllFiles(ctx context.Context, limit, offset int32, sortBy, sortOrder string) ([]sqlc.ListAllFilesRow, error) {
 	return s.repo.ListAllFiles(ctx, sqlc.ListAllFilesParams{
 		Limit:     limit,
@@ -556,12 +485,9 @@ func (s *Service) ListAllFiles(ctx context.Context, limit, offset int32, sortBy,
 	})
 }
 
-type ShareInfoResponse struct {
-	ShareURL   string `json:"shareURL"`
-	SharedWith []User `json:"sharedWith"`
-	AllUsers   []User `json:"allUsers"`
-}
-
+// GetShareInfo returns sharing details for a file owned by
+// the current user, including its share URL and the list
+// of users who have been granted access.
 func (s *Service) GetShareInfo(ctx context.Context, fileID uuid.UUID) (ShareInfoResponse, error) {
 	userID, ok := userctx.GetUserID(ctx)
 	if !ok {
@@ -627,6 +553,9 @@ func (s *Service) GetShareInfo(ctx context.Context, fileID uuid.UUID) (ShareInfo
 	}, nil
 }
 
+// MoveFile moves a file into a different folder. Ensures
+// the caller owns both the file and the target folder (if provided).
+// If the target folder is not provided, it is moved to the root Folder.
 func (s *Service) MoveFile(ctx context.Context, fileID uuid.UUID, req MoveFileRequest) error {
 	userID, ok := userctx.GetUserID(ctx)
 	if !ok {
@@ -664,11 +593,9 @@ func (s *Service) MoveFile(ctx context.Context, fileID uuid.UUID, req MoveFileRe
 	return s.repo.UpdateFileFolder(ctx, params)
 }
 
-type UpdateFileSharesRequest struct {
-	FileID  uuid.UUID
-	UserIDs []int64
-}
-
+// UpdateFileShares updates the list of users a file is shared with.
+// It removes all existing shares for the file, then inserts the new list
+// of user IDs in a single transaction to ensure atomicity.
 func (s *Service) UpdateFileShares(ctx context.Context, req UpdateFileSharesRequest) error {
 	userID, ok := userctx.GetUserID(ctx)
 	if !ok {

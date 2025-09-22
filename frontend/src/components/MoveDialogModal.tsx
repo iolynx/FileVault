@@ -108,9 +108,9 @@ export function MoveDialogModal({
 		<Dialog open={isOpen} onOpenChange={isOpenChange}>
 			<DialogContent>
 				<DialogHeader>
-					<DialogTitle>Move File</DialogTitle>
+					<DialogTitle>Move {toSentenceCase(context)}</DialogTitle>
 					<DialogDescription>
-						Select a folder where this file should be moved
+						Select a folder where this {context} should be moved
 					</DialogDescription>
 				</DialogHeader>
 

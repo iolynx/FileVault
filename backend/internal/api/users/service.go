@@ -14,12 +14,17 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Service handles user-related business logic, including signup, authentication, and user queries.
 type Service struct {
 	repo                *Repository
 	jwtSecret           []byte
 	defaultStorageQuota int64
 }
 
+// NewService creates a new instance of the users Service.
+// - repo: the user repository for database operations.
+// - jwtSecret: secret key used for signing JWT tokens.
+// - cfg: configuration struct containing server settings like default storage quota.
 func NewService(repo *Repository, jwtSecret string, cfg *config.Config) *Service {
 	return &Service{
 		repo:                repo,
@@ -28,6 +33,10 @@ func NewService(repo *Repository, jwtSecret string, cfg *config.Config) *Service
 	}
 }
 
+// Signup registers a new user with the provided email, name, and password.
+// - Hashes the password securely using bcrypt.
+// - Fails if a user with the same email already exists.
+// - Returns the newly created user record or an error if the operation fails.
 func (s *Service) Signup(ctx context.Context, email, name string, password string) (sqlc.User, error) {
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -46,6 +55,8 @@ func (s *Service) Signup(ctx context.Context, email, name string, password strin
 	return user, nil
 }
 
+// AuthenticateUser verifies the provided email and password against the database. (Logging In)
+// Returns the user's ID if authentication is successful, or an error otherwise.
 func (s *Service) AuthenticateUser(ctx context.Context, email, password string) (int64, error) {
 	user, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
@@ -63,6 +74,8 @@ func (s *Service) AuthenticateUser(ctx context.Context, email, password string) 
 	return user.ID, nil
 }
 
+// GenerateToken generates a JWT for the given user ID.
+// The token is valid for 24 hours and signed using the service's jwtSecret.
 func (s *Service) GenerateToken(userID int64) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id": userID,
@@ -73,12 +86,9 @@ func (s *Service) GenerateToken(userID int64) (string, error) {
 	return token.SignedString(s.jwtSecret)
 }
 
-type User struct {
-	ID    int64  `json:"id"`
-	Email string `json:"email"`
-	Name  string `json:"name"`
-}
-
+// ListOtherUsers retrieves all users in the system except the one with the specified userID.
+// Returns a slice of User structs or an internal server error if the query fails.
+// Used to populate options in the ShareModal
 func (s *Service) ListOtherUsers(ctx context.Context, userID int64) ([]User, error) {
 	otherUsersRow, err := s.repo.ListOtherUsers(ctx, userID)
 	if err != nil {
@@ -96,20 +106,10 @@ func (s *Service) ListOtherUsers(ctx context.Context, userID int64) ([]User, err
 	return otherUsers, nil
 }
 
-type MeResponse struct {
-	ID                     int64   `json:"id"`
-	Email                  string  `json:"email"`
-	Name                   string  `json:"name"`
-	Role                   string  `json:"role"`
-	StorageUsedBytes       int64   `json:"storage_used_bytes"`       // "Original storage usage"
-	DeduplicatedUsageBytes int64   `json:"deduplicated_usage_bytes"` // "Total storage used (deduplicated)"
-	StorageQuotaBytes      int64   `json:"storage_quota_bytes"`
-	SavingsBytes           int64   `json:"savings_bytes"`
-	SavingsPercentage      float64 `json:"savings_percentage"`
-}
-
 // GetMe is the complete service for the /auth/me endpoint
-// it returns the User info along with role, and storage statistics.
+// it returns the Authenticaed User's info along with role, and storage statistics.
+// Returns a MeResponse containing the user's details and storage usage information,
+// or an error if the information could not be fetched.
 func (s *Service) GetMe(ctx context.Context) (MeResponse, error) {
 	userID, ok := userctx.GetUserID(ctx)
 	if !ok {

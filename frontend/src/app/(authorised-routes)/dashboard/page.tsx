@@ -20,13 +20,26 @@ import { DataTablePagination } from '@/components/DataTablePagination';
 import { useDebounce } from "@/hooks/useDebounce";
 import FilesSkeleton from "@/components/FilesSkeleton";
 
-const filterOptions: FilterOption[] = [
-	{ value: 'content_type', label: 'MIME Type' },
-	{ value: 'user_owns_file', label: 'Location' },
-	{ value: 'uploaded_before', label: 'Before:' },
-	{ value: 'uploaded_after', label: 'After:' }
-];
-
+/**
+ * DashboardPage component
+ * 
+ * Displays the user's files and folders, allows filtering, sorting, pagination, 
+ * uploading new files, and drag-and-drop functionality.
+ * 
+ * Uses several custom hooks:
+ * - `useContentStore` for fetching and managing file/folder data
+ * - `useFileUploader` for handling file uploads
+ * - `useDragAndDrop` for drag-and-drop support
+ * 
+ * Internal Features:
+ * - Filter by column values and file sizes
+ * - Sort files by a specific key and direction
+ * - Pagination support
+ * - Refresh contents after actions
+ * - Dropzone overlay when dragging files
+ * 
+ * @component
+ */
 const DashboardPage = () => {
 	const { contents, path, isLoading, setLoading, totalCount, fetchContents } = useContentStore();
 
@@ -40,7 +53,11 @@ const DashboardPage = () => {
 	const currentFolder = path[path.length - 1];
 	const currentFolderId = currentFolder ? currentFolder.id : null;
 
-
+	/**
+	 * Updates active filters when a user changes a filter for a column.
+	 * @param {string} column - The column being filtered
+	 * @param {string | Date | undefined} value - The value to filter by
+	 */
 	const handleFilterChange = (column: string, value: string | Date | undefined) => {
 		setLoading(true);
 		setActiveFilters(prevFilters => {
@@ -70,7 +87,12 @@ const DashboardPage = () => {
 		});
 	};
 
+	/**
+	 * Updates size-related filters
+	 * @param {{ min_size: number | null, max_size: number | null }} sizeFilter 
+	 */
 	const handleSizeFilterChange = (sizeFilter: { min_size: number | null, max_size: number | null }) => {
+		setLoading(true);
 		setActiveFilters(prevFilters => {
 			// Remove any old size filters
 			let updatedFilters = prevFilters.filter(
@@ -113,6 +135,10 @@ const DashboardPage = () => {
 		return () => clearTimeout(debounceTimer);
 	}, [path, activeFilters, sortConfig, pagination, fetchContents]);
 
+	/**
+	 * Refreshes file contents using the current folder and active filters
+	 * Uses the fetchContents hook from useContentStore
+	 */
 	const refreshContents = () => {
 		const currentFolder = path[path.length - 1];
 		const filtersObject = activeFilters.reduce((acc, filter) => {
@@ -122,6 +148,10 @@ const DashboardPage = () => {
 		fetchContents(currentFolder.id, filtersObject, pagination);
 	};
 
+	/**
+	 * Handles file uploads
+	 * @param {File[]} files - Array of files to upload
+	 */
 	const handleUpload = async (files: File[]) => {
 		const currentFolderId = path[path.length - 1]?.id || null;
 		uploadFiles(files, currentFolderId)
@@ -132,6 +162,10 @@ const DashboardPage = () => {
 		onUploadComplete: refreshContents,
 	})
 
+	/**
+	 * Handles sorting by a specific key
+	 * @param {string} key - Column key to sort by
+	 */
 	const handleSort = (key: string) => {
 		setLoading(true)
 		setSortConfig(prevConfig => {

@@ -8,6 +8,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Connect establishes a PostgreSQL connection pool using the provided DSN.
+// It parses the DSN, creates a connection pool, verifies connectivity with a ping,
+// and returns the initialized pool. Logs fatal errors if any step fails.
 func Connect(dsn string) *pgxpool.Pool {
 	config, err := pgxpool.ParseConfig(dsn)
 	if err != nil {

@@ -94,19 +94,6 @@ func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) (File, e
 	return i, err
 }
 
-const decrementBlobRefcount = `-- name: DecrementBlobRefcount :one
-UPDATE blobs SET refcount = refcount - 1
-WHERE id = $1
-RETURNING refcount
-`
-
-func (q *Queries) DecrementBlobRefcount(ctx context.Context, id uuid.UUID) (int32, error) {
-	row := q.db.QueryRow(ctx, decrementBlobRefcount, id)
-	var refcount int32
-	err := row.Scan(&refcount)
-	return refcount, err
-}
-
 const deleteAllSharesForFile = `-- name: DeleteAllSharesForFile :exec
 DELETE FROM file_shares
 WHERE file_id = $1
@@ -335,19 +322,6 @@ func (q *Queries) GetFilesForUserCount(ctx context.Context, arg GetFilesForUserC
 	return count, err
 }
 
-const incrementBlobRefcount = `-- name: IncrementBlobRefcount :one
-UPDATE blobs SET refcount = refcount + 1
-WHERE id = $1
-RETURNING refcount
-`
-
-func (q *Queries) IncrementBlobRefcount(ctx context.Context, id uuid.UUID) (int32, error) {
-	row := q.db.QueryRow(ctx, incrementBlobRefcount, id)
-	var refcount int32
-	err := row.Scan(&refcount)
-	return refcount, err
-}
-
 const incrementFileDownloadCount = `-- name: IncrementFileDownloadCount :exec
 UPDATE files
 SET download_count = download_count + 1
@@ -500,90 +474,6 @@ func (q *Queries) ListFilesByOwner(ctx context.Context, arg ListFilesByOwnerPara
 			&i.ContentType,
 			&i.UploadedAt,
 			&i.IsPublic,
-			&i.DownloadCount,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listFilesForUser = `-- name: ListFilesForUser :many
-SELECT DISTINCT 
-    f.id,
-    f.filename,
-    f.size,
-    f.declared_mime AS content_type,
-    f.uploaded_at,
-    (f.owner_id = $3) AS user_owns_file,
-    f.download_count
-FROM files f
-LEFT JOIN file_shares fs ON f.id = fs.file_id
-WHERE 
-    (f.owner_id = $3 OR fs.shared_with = $3)
-    AND ($4::TEXT = '' OR f.filename ILIKE '%' || $4::TEXT || '%')
-    AND ($5::TEXT = '' OR f.declared_mime = $5::TEXT)
-    AND ($6::TIMESTAMPTZ IS NULL OR f.uploaded_at > $6::TIMESTAMPTZ)
-    AND ($7::TIMESTAMPTZ IS NULL OR f.uploaded_at < $7::TIMESTAMPTZ)
-    AND (
-        $8::int = 0
-        OR ($8::int = 1 AND f.owner_id = $3)
-        OR ($8::int = 2 AND f.owner_id <> $3)
-    )
-ORDER BY f.uploaded_at DESC
-LIMIT $1 OFFSET $2
-`
-
-type ListFilesForUserParams struct {
-	Limit           int32              `json:"limit"`
-	Offset          int32              `json:"offset"`
-	UserID          int64              `json:"user_id"`
-	Filename        string             `json:"filename"`
-	MimeType        string             `json:"mime_type"`
-	UploadedAfter   pgtype.Timestamptz `json:"uploaded_after"`
-	UploadedBefore  pgtype.Timestamptz `json:"uploaded_before"`
-	OwnershipStatus int32              `json:"ownership_status"`
-}
-
-type ListFilesForUserRow struct {
-	ID            uuid.UUID          `json:"id"`
-	Filename      string             `json:"filename"`
-	Size          int64              `json:"size"`
-	ContentType   pgtype.Text        `json:"content_type"`
-	UploadedAt    pgtype.Timestamptz `json:"uploaded_at"`
-	UserOwnsFile  bool               `json:"user_owns_file"`
-	DownloadCount sql.NullInt64      `json:"download_count"`
-}
-
-func (q *Queries) ListFilesForUser(ctx context.Context, arg ListFilesForUserParams) ([]ListFilesForUserRow, error) {
-	rows, err := q.db.Query(ctx, listFilesForUser,
-		arg.Limit,
-		arg.Offset,
-		arg.UserID,
-		arg.Filename,
-		arg.MimeType,
-		arg.UploadedAfter,
-		arg.UploadedBefore,
-		arg.OwnershipStatus,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListFilesForUserRow{}
-	for rows.Next() {
-		var i ListFilesForUserRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Filename,
-			&i.Size,
-			&i.ContentType,
-			&i.UploadedAt,
-			&i.UserOwnsFile,
 			&i.DownloadCount,
 		); err != nil {
 			return nil, err
@@ -949,20 +839,6 @@ func (q *Queries) ListUsersWithAccessToFile(ctx context.Context, fileID uuid.UUI
 		return nil, err
 	}
 	return items, nil
-}
-
-const updateBlobRefcount = `-- name: UpdateBlobRefcount :exec
-UPDATE blobs SET refcount = refcount + $2 WHERE id = $1
-`
-
-type UpdateBlobRefcountParams struct {
-	ID       uuid.UUID `json:"id"`
-	Refcount int32     `json:"refcount"`
-}
-
-func (q *Queries) UpdateBlobRefcount(ctx context.Context, arg UpdateBlobRefcountParams) error {
-	_, err := q.db.Exec(ctx, updateBlobRefcount, arg.ID, arg.Refcount)
-	return err
 }
 
 const updateFileFolder = `-- name: UpdateFileFolder :exec

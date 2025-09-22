@@ -5,13 +5,30 @@ import api from '@/lib/axios';
 import { toast } from 'sonner';
 import { Progress } from '@/components/ui/progress';
 import { useAuthStore } from '@/stores/useAuthStore';
-import { useDebounce } from './useDebounce';
-import { retry } from '@/lib/retry';
 
 interface UseFileUploaderProps {
 	onUploadComplete: () => void;
 }
 
+/**
+ * Props for useFileUploader hook
+ * 
+ * @typedef {Object} UseFileUploaderProps
+ * @property {() => void} onUploadComplete - Callback invoked after a successful file upload
+ */
+
+/**
+ * Custom React hook to handle file uploads.
+ * - Manages uploading state (`isUploading`)
+ * - Uses `onUploadComplete` callback when uploads finish
+ * - Optionally integrates with auth/user store (`fetchUser`)
+ * - Can display toast notifications for upload progress and errors
+ * 
+ * @param {UseFileUploaderProps} props - Options for the hook
+ * @returns {{ isUploading: boolean, uploadFiles: (files: File[], folderId?: string | null) => Promise<void> }} 
+ *   - `isUploading`: Indicates whether a file upload is currently in progress
+ *   - `uploadFiles`: Function to upload an array of files to an optional folder ID
+ */
 export const useFileUploader = ({ onUploadComplete }: UseFileUploaderProps) => {
 	const [isUploading, setIsUploading] = useState(false);
 	const toastIdRef = useRef<string | number | null>(null);

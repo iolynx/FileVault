@@ -28,6 +28,32 @@ interface DataTablePaginationProps {
 	siblingCount?: number;
 }
 
+/**
+ * Props for DataTablePagination
+ * 
+ * @typedef {Object} DataTablePaginationProps
+ * @property {number} pageIndex - Current zero-based page index
+ * @property {number} pageSize - Number of items per page
+ * @property {number} totalCount - Total number of items in the dataset
+ * @property {(index: number) => void} setPageIndex - Callback to update the current page index
+ * @property {(size: number) => void} setPageSize - Callback to update the number of items per page
+ * @property {number} [siblingCount=1] - Number of sibling page numbers to show on each side of the current page
+ */
+
+/**
+ * DataTablePagination component
+ * 
+ * Renders pagination controls for a table of data.
+ * Supports:
+ * - Navigating to the previous/next page
+ * - Dynamically computing page numbers using `usePagination`
+ * - Conditionally rendering pagination only when total pages > 1
+ * 
+ * @param {DataTablePaginationProps} props - Component props
+ * @returns {JSX.Element | null} JSX element rendering the pagination controls, or null if pagination is unnecessary
+ * 
+ * @component
+ */
 export function DataTablePagination({
 	pageIndex,
 	pageSize,
@@ -36,6 +62,7 @@ export function DataTablePagination({
 	setPageSize,
 	siblingCount = 1,
 }: DataTablePaginationProps) {
+	/** Current 1-based page number */
 	const currentPage = pageIndex + 1;
 	const totalPageCount = Math.ceil(totalCount / pageSize);
 
@@ -46,20 +73,28 @@ export function DataTablePagination({
 		pageSize,
 	});
 
+	/**
+	 * Navigate to the next page
+	 */
 	const onNext = () => {
 		if (currentPage < totalPageCount) {
 			setPageIndex(pageIndex + 1);
 		}
 	};
 
+	/**
+	 * Navigate to the previous page
+	 */
 	const onPrevious = () => {
 		if (currentPage > 1) {
 			setPageIndex(pageIndex - 1);
 		}
 	};
 
-	if (totalPageCount <= 1) {
-		return null; // Do not render pagination if there's only one page or less
+	// Do not render pagination if the number of records 
+	// are lesser than the smallest pageSize option (10)
+	if (Math.ceil(totalCount / 10) <= 1) {
+		return null;
 	}
 
 	return (
@@ -103,7 +138,7 @@ export function DataTablePagination({
 							);
 						}
 						return (
-							<PaginationItem key={pageNumber}>
+							<PaginationItem key={pageNumber} className='cursor-pointer'>
 								<PaginationLink
 									onClick={() => setPageIndex(Number(pageNumber) - 1)}
 									isActive={currentPage === pageNumber}

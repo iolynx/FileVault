@@ -17,13 +17,6 @@ const locationOptions = [
 	{ value: '2', label: 'Shared with You' },
 ]
 
-// const mimeTypeOptions = [
-// 	{ value: 'image/jpeg', label: 'JPEG Image' },
-// 	{ value: 'application/pdf', label: 'PDF Document' },
-// 	{ value: 'text/plain', label: 'Text File' },
-// 	{ value: 'image/png', label: 'PNG Image' },
-// ];
-
 const PREDEFINED_RANGES = [
 	{ label: 'Tiny (< 1 MB)', minBytes: 0, maxBytes: 1048576 },
 	{ label: 'Small (1-10 MB)', minBytes: 1048576, maxBytes: 10485760 },
@@ -31,16 +24,45 @@ const PREDEFINED_RANGES = [
 	{ label: 'Large (> 100 MB)', minBytes: 104857600, maxBytes: null }, // No upper limit
 ];
 
+
 interface SearchAndFilterProps {
 	activeFilters: ActiveFilter[];
 	onFilterChange: (column: string, value: Date | string | undefined) => void;
 	onSizeFilterChange: (filter: { min_size: number | null, max_size: number | null }) => void;
 }
 
+
+/**
+ * Props for SearchAndFilterComponent
+ * 
+ * @typedef {Object} SearchAndFilterProps
+ * @property {ActiveFilter[]} activeFilters - Array of currently active filters
+ * @property {(column: string, value: Date | string | undefined) => void} onFilterChange - Callback when a filter changes
+ * @property {(filter: { min_size: number | null, max_size: number | null }) => void} onSizeFilterChange - Callback when size filters change
+ */
+
+/**
+ * SearchAndFilterComponent
+ * 
+ * Renders filter inputs for searching and filtering files/folders. 
+ * Supports:
+ * - Column-based filters (string or date)
+ * - Size-based filters (min_size and max_size)
+ * 
+ * @param {SearchAndFilterProps} props - Component props
+ * @returns {JSX.Element} JSX element rendering the search and filter inputs
+ * 
+ * @component
+ */
 export function SearchAndFilterComponent({ activeFilters, onFilterChange, onSizeFilterChange }: SearchAndFilterProps) {
-	// Helper function to get the current value for any filter
-	const getActiveValue = (column: string) =>
+	/**
+	 * Returns the currently active value for the filter of any given column.
+	 * @param {string} column - Column name
+	 * @returns {string} The active filter value or empty string if none
+	 */
+	const getActiveValue = (column: string): string =>
 		activeFilters.find((f) => f.column === column)?.value || '';
+
 
 	const beforeDateString = getActiveValue('uploaded_before');
 	const beforeDateObject = beforeDateString ? new Date(beforeDateString) : undefined;

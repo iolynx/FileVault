@@ -13,6 +13,7 @@ import (
 type AppHandler func(w http.ResponseWriter, r *http.Request) error
 
 // MakeHTTPHandler converts an AppHandler into a standard http.HandlerFunc.
+// This allows the functions it encapsulates to return custom errors, that it can process.
 func MakeHTTPHandler(handler AppHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := handler(w, r); err != nil {

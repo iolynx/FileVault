@@ -9,6 +9,10 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// AuthMiddleware returns an HTTP middleware that validates JWT tokens from cookies.
+// It checks the "jwt" cookie, verifies the token using the provided secret, and
+// injects the user ID into the request context for downstream handlers. Unauthorized
+// requests are responded to with HTTP 401.
 func AuthMiddleware(secret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

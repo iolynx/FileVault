@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -18,6 +19,7 @@ import (
 )
 
 func main() {
+	// Load config from environment variables
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatal(err)
@@ -58,12 +60,13 @@ func main() {
 	folderHandler := folders.NewHandler(folderService)
 
 	// Initialize Files Repository, Service, Handler
-	fileRepo := files.NewRepository(pool)
+	fileRepo := files.NewRepository(pool) // Initializing with pool to enable transactions
 	fileService := files.NewService(fileRepo, userRepo, folderRepo, store)
 	fileHandler := files.NewFileHandler(fileService)
 
 	server := api.NewServer(cfg, userHandler, fileHandler, folderHandler, redisClient, dbRepo)
 
-	log.Println("server listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", server.Router))
+	log.Printf("Server listening on :%s", cfg.Server.Port)
+	addr := fmt.Sprintf(":%s", cfg.Server.Port)
+	log.Fatal(http.ListenAndServe(addr, server.Router))
 }
