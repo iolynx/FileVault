@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 interface RetryOptions {
   retries?: number;
   initialDelay?: number;
-  shouldRetry?: (error: any) => boolean;
+  shouldRetry?: (error) => boolean;
 }
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -28,7 +28,7 @@ export async function retry<T>(
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       return await fn();
-    } catch (error: any) {
+    } catch (error) {
       if (attempt === retries || !shouldRetry(error)) {
         // If we've reached the last attempt or the error is not retryable, throw it.
         throw error;

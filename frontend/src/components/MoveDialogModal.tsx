@@ -78,9 +78,9 @@ export function MoveDialogModal({
 
 			setFolders(fetchedFolders.filter((folder: Folder) => (folder.id !== fileId)))
 
-		} catch (error: any) {
+		} catch (error) {
 			console.error("Error fetching folders:", error)
-			toast.error(error.response?.data?.message || "Failed to load folders")
+			toast.error("Failed to load folders")
 		}
 	}
 
@@ -98,9 +98,9 @@ export function MoveDialogModal({
 			toast.success(`${toSentenceCase(context)} moved successfully`)
 			isOpenChange(false)
 			onConfirm()
-		} catch (error: any) {
+		} catch (error) {
 			console.error(error)
-			toast.error(error.response?.data?.message || "Failed to move file")
+			toast.error("Failed to move file")
 		}
 	}
 

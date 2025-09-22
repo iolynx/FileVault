@@ -2,13 +2,9 @@
 
 import FilesTable from "@/components/FilesTable";
 import { Card } from "@/components/ui/card";
-import api from "@/lib/axios";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
 import { FileUploadMenu } from "@/components/FileUploadMenu";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useRouter } from "next/navigation";
-import { ActiveFilter, FilterOption } from "@/types/Filter";
+import { ActiveFilter } from "@/types/Filter";
 import { SearchAndFilterComponent } from "@/components/SearchAndFilter";
 import { useContentStore } from "@/stores/useContentStore";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
@@ -17,7 +13,6 @@ import { useDragAndDrop } from "@/hooks/useDragAndDrop";
 import { useFileUploader } from "@/hooks/useFileUploader";
 import { SortConfig } from "@/types/Sort";
 import { DataTablePagination } from '@/components/DataTablePagination';
-import { useDebounce } from "@/hooks/useDebounce";
 import FilesSkeleton from "@/components/FilesSkeleton";
 
 /**
@@ -95,7 +90,7 @@ const DashboardPage = () => {
 		setLoading(true);
 		setActiveFilters(prevFilters => {
 			// Remove any old size filters
-			let updatedFilters = prevFilters.filter(
+			const updatedFilters = prevFilters.filter(
 				f => f.column !== 'min_size' && f.column !== 'max_size'
 			);
 

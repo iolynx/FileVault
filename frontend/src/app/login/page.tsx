@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import api from '@/lib/axios'
 import Loader from "@/components/loader";
 import { useRouter } from "next/navigation";
+import { APIError } from "@/types/APIError";
 
 const LoginPage = () => {
   const { register, handleSubmit } = useForm();
@@ -49,8 +50,8 @@ const LoginPage = () => {
       console.log(res);
       toast.success(res?.data?.message || "Logged In")
       router.push("/dashboard");
-    } catch (error: any) {
-      toast.error("Error: " + error.response?.data?.error || "Login failed");
+    } catch (error) {
+      toast.error("Login failed");
     } finally {
       setIsLoading(false);
     }

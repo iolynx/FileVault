@@ -35,7 +35,7 @@ export function ActivityChart() {
 			setIsLoading(true);
 			try {
 				const response = await api.get('/admin/audit-logs/stats/activity-by-day');
-				const formattedData = response.data.map((stat: any) => ({
+				const formattedData = response.data.map((stat) => ({
 					...stat,
 					activity_day: new Date(stat.activity_day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
 				}));

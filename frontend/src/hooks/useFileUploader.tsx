@@ -78,9 +78,9 @@ export const useFileUploader = ({ onUploadComplete }: UseFileUploaderProps) => {
 				toast.success('Files uploaded successfully!');
 				setTimeout(fetchUser, 1200);
 			}
-		} catch (error: any) {
+		} catch (error) {
 			console.log('Upload failed:', error);
-			toast.error(`Upload Failed: ${error.response.data.error}`);
+			toast.error("Upload Failed");
 		} finally {
 			setIsUploading(false);
 			toastIdRef.current = null;

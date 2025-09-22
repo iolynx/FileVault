@@ -125,9 +125,9 @@ export default function FileActionsDropdown({ file, onFileChange }: ActionsDropD
 			} else {
 				toast.error(res.data.error);
 			}
-		} catch (error: any) {
+		} catch (error) {
 			console.log('Error while deleting file: ', error);
-			toast.error(error.response.data.message);
+			toast.error("Error while fetching data");
 		}
 	}
 
@@ -158,8 +158,8 @@ export default function FileActionsDropdown({ file, onFileChange }: ActionsDropD
 			link.parentNode?.removeChild(link);
 			window.URL.revokeObjectURL(url);
 			toast.success("File Downloaded");
-		} catch (error: any) {
-			toast.error(error.response.data.message);
+		} catch (error) {
+			toast.error("Error while downloading..");
 		}
 	}
 
@@ -186,8 +186,8 @@ export default function FileActionsDropdown({ file, onFileChange }: ActionsDropD
 			console.log(res.data);
 			renameItem(file.id, res.data);
 			toast.success(`Renamed file to ${res.data.filename}`);
-		} catch (error: any) {
-			toast.error(error.response.data.message)
+		} catch (error) {
+			toast.error("Error: Could not rename file...")
 		}
 	}
 
@@ -213,9 +213,9 @@ export default function FileActionsDropdown({ file, onFileChange }: ActionsDropD
 			);
 			toast.success(res.data.message);
 
-		} catch (error: any) {
+		} catch (error) {
 			console.error(error);
-			toast.error(error.response?.data?.error || "Failed to share file");
+			toast.error("Failed to share file");
 		}
 	};
 	return (

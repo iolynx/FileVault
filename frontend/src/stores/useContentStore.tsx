@@ -16,7 +16,7 @@ interface ContentState {
 	totalCount: number;
 	isLoading: boolean;
 	setLoading: (loading: boolean) => void;
-	fetchContents: (folderId: string | null, filters: any, pagination: { pageIndex: number, pageSize: number }) => Promise<void>;
+	fetchContents: (folderId: string | null, filters, pagination: { pageIndex: number, pageSize: number }) => Promise<void>;
 	navigateToFolder: (folder: { id: string; filename: string }) => void;
 	navigateToPathIndex: (index: number) => void;
 	renameItem: (itemId: string, updatedItem: ContentItem) => void;
@@ -48,7 +48,7 @@ export const useContentStore = create<ContentState>((set, get) => ({
 			const response = await retry(fetcher, {
 				retries: 3,
 				initialDelay: 1500,
-				shouldRetry: (error: any) => error.response?.status === 429,
+				shouldRetry: (error) => error.response?.status === 429,
 			})
 
 			set({
@@ -56,7 +56,7 @@ export const useContentStore = create<ContentState>((set, get) => ({
 				totalCount: response.totalCount,
 				isLoading: false
 			});
-		} catch (error: any) {
+		} catch (error) {
 			toast.error("Failed to fetch files and folders");
 			console.error("Failed to fetch contents after retries", error);
 			set({ isLoading: false });

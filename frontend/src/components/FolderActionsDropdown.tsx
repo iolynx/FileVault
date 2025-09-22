@@ -77,9 +77,9 @@ export default function FolderActionsDropdown({ folder, onFolderChange }: Action
 			} else {
 				toast.error(res.data.error);
 			}
-		} catch (error: any) {
+		} catch (error) {
 			console.log('Error while deleting folder: ', error);
-			toast.error(error.response.data.message);
+			toast.error("Error while deleting folder");
 		}
 	}
 
@@ -105,8 +105,8 @@ export default function FolderActionsDropdown({ folder, onFolderChange }: Action
 			)
 			renameItem(folder.id, res.data);
 			toast.success(`Renamed folder to ${res.data.filename}`);
-		} catch (error: any) {
-			toast.error(error.response.data.error)
+		} catch (error) {
+			toast.error("Error: Could not rename folder...")
 		}
 	}
 

@@ -19,7 +19,7 @@ interface AuditLog {
 	user_id: { Int64: number; Valid: boolean; };
 	action: string;
 	target_id: string;
-	details: Record<string, any> | null; // It's now a regular object or null
+	details: Record<string, unknown> | null; // It's now a regular object or null
 	created_at: string;
 }
 

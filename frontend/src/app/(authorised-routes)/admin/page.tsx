@@ -1,6 +1,4 @@
-import AdminFilesTable from "@/components/AdminFilesTable";
 import { AdminPageClient } from "@/components/AdminPageClient";
-import { Card } from "@/components/ui/card";
 import { getCurrentUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 

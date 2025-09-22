@@ -9,7 +9,6 @@ import {
 } from "@/components/ui/navigation-menu";
 import { ReactNode } from "react";
 import { UserAccountPopover } from "@/components/UserAccountPopover";
-import { StorageQuotaBanner } from "@/components/StorageQuotaBanner";
 import { getCurrentUser } from "@/lib/auth";
 import AuthStoreInitializer from "@/components/AuthStoreInitializer";
 
@@ -58,7 +57,6 @@ const AuthorizedLayout = async ({ children }: { children: ReactNode }) => {
         <div>
           <UserAccountPopover />
 
-          <StorageQuotaBanner user={user} />
         </div>
       </div>
       <section className="w-full px-4">{children}</section>

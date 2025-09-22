@@ -6,7 +6,7 @@ import { formatBytes } from '@/lib/utils';
 interface ChartData {
 	name: string;
 	value: number;
-	[key: string]: any;
+	[key: string]: unknown;
 }
 
 interface SavingsPieChartProps {

@@ -21,6 +21,7 @@ import Link from 'next/link';
 export function UserAccountPopover() {
 	// Return an empty div if user data hasn't loaded yet
 	const user = useAuthStore((state) => state.user);
+	const router = useRouter()
 
 	if (!user) {
 		return (
@@ -34,7 +35,6 @@ export function UserAccountPopover() {
 
 	const usedStoragePercentage = (user.deduplicated_usage_bytes / user.storage_quota_bytes) * 100;
 	const remainingBytes = Math.max(user.storage_quota_bytes - user.deduplicated_usage_bytes, 0);
-	const router = useRouter()
 
 	const logout = async () => {
 		try {
