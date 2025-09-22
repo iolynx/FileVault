@@ -115,14 +115,13 @@ FROM file_shares fs
 JOIN users u ON u.id = fs.shared_with
 WHERE fs.file_id = $1;
 
--- name: CreateFileShare :one
-INSERT INTO file_shares (file_id, shared_with)
-VALUES ($1, $2)
-RETURNING id, file_id, shared_with, permission, created_at;
-
--- name: DeleteFileShare :exec
+-- name: DeleteAllSharesForFile :exec
 DELETE FROM file_shares
-WHERE file_id = $1 AND shared_with = $2;
+WHERE file_id = $1;
+
+-- name: AddSharesToFile :copyfrom
+INSERT INTO file_shares (file_id, shared_with)
+VALUES ($1, $2);
 
 -- name: ListFilesForUser :many
 SELECT DISTINCT 

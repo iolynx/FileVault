@@ -327,37 +327,6 @@ func (s *Service) UpdateFilename(ctx context.Context, newFilename string, fileID
 
 }
 
-func (s *Service) ShareFile(ctx context.Context, fileID uuid.UUID, targetUserID int64) error {
-	ownerID, ok := userctx.GetUserID(ctx)
-	if !ok {
-		return apierror.NewUnauthorizedError()
-	}
-
-	file, err := s.repo.GetFileByUUID(ctx, fileID)
-	if err != nil {
-		return err
-	}
-
-	if targetUserID <= 0 {
-		return apierror.NewBadRequestError("Invalid UserID")
-	}
-	if int64(targetUserID) == ownerID {
-		return apierror.NewBadRequestError("Target User ID cannot be your ID")
-	}
-
-	if file.OwnerID != ownerID {
-		return apierror.NewForbiddenError()
-	}
-
-	userExists, _ := s.repo.DoesUserExist(ctx, targetUserID)
-	if !userExists {
-		return apierror.NewInternalServerError("User does not exist")
-	}
-
-	_, err = s.repo.CreateFileShare(ctx, fileID, targetUserID)
-	return err
-}
-
 func (s *Service) ListFilesSharedWithUser(ctx context.Context, userID int64, search string, limit, offset int32) ([]File, error) {
 	fileRows, err := s.repo.ListFilesSharedWithUser(ctx, userID, search, limit, offset)
 	if err != nil {
@@ -377,24 +346,6 @@ func (s *Service) ListFilesSharedWithUser(ctx context.Context, userID int64, sea
 	}
 
 	return files, nil
-}
-
-func (s *Service) RemoveFileShare(ctx context.Context, fileID uuid.UUID, sharedWith int64) error {
-	ownerID, ok := userctx.GetUserID(ctx)
-	if !ok {
-		return apierror.NewUnauthorizedError()
-	}
-
-	file, err := s.repo.GetFileByUUID(ctx, fileID)
-	if err != nil {
-		return apierror.NewNotFoundError("File")
-	}
-
-	if file.OwnerID != ownerID {
-		return apierror.NewForbiddenError()
-	}
-
-	return s.repo.DeleteFileShare(ctx, fileID, sharedWith)
 }
 
 func (s *Service) ListUsersWithAccesToFile(ctx context.Context, fileID uuid.UUID) ([]User, error) {
@@ -711,4 +662,61 @@ func (s *Service) MoveFile(ctx context.Context, fileID uuid.UUID, req MoveFileRe
 
 	// update DB
 	return s.repo.UpdateFileFolder(ctx, params)
+}
+
+type UpdateFileSharesRequest struct {
+	FileID  uuid.UUID
+	UserIDs []int64
+}
+
+func (s *Service) UpdateFileShares(ctx context.Context, req UpdateFileSharesRequest) error {
+	userID, ok := userctx.GetUserID(ctx)
+	if !ok {
+		return apierror.NewUnauthorizedError()
+	}
+
+	// Ownership Check
+	file, err := s.repo.GetFileByUUID(ctx, req.FileID)
+	if err != nil {
+		return apierror.NewNotFoundError("File")
+	}
+	if file.OwnerID != userID {
+		return apierror.NewForbiddenError()
+	}
+
+	// Starting a database transaction
+	// to perform atomic changes on the file_shares table
+	tx, err := s.repo.BeginTx(ctx)
+	if err != nil {
+		return apierror.NewInternalServerError("could not start transaction")
+	}
+	defer tx.Rollback(ctx) // rollback on error
+
+	// use this for all succeeding operations
+	qtx := s.repo.WithTx(tx)
+
+	// delete all existing shares for this file.
+	if err := qtx.DeleteAllSharesForFile(ctx, req.FileID); err != nil {
+		return apierror.NewInternalServerError("could not update shares")
+	}
+
+	// if there are new users to share with, perform a bulk insert
+	// everything succeeded, commit the transaction.
+	if len(req.UserIDs) > 0 {
+		params := make([]sqlc.AddSharesToFileParams, len(req.UserIDs))
+
+		for i, targetUserID := range req.UserIDs {
+			params[i] = sqlc.AddSharesToFileParams{
+				FileID:     req.FileID,
+				SharedWith: targetUserID,
+			}
+		}
+
+		_, err = qtx.AddSharesToFile(ctx, params)
+		if err != nil {
+			return apierror.NewInternalServerError("could not add new shares")
+		}
+	}
+	return tx.Commit(ctx)
+
 }

@@ -23,6 +23,7 @@ import { InfoModal } from "@/components/InfoModal";
 import { useContentStore } from "@/stores/useContentStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { MoveDialogModal } from "./MoveDialogModal";
+import { parse } from "node:path/posix";
 
 interface ActionsDropDownProps {
 	file: ContentItem;
@@ -127,29 +128,18 @@ export default function FileActionsDropdown({ file, onFileChange }: ActionsDropD
 
 	// sequential sharing for now, TODO: creat an endpoint that can accept users in bulk
 	const handleShare = async (selectedUsers: string[]) => {
-		// find the users that were added
-		const added = selectedUsers.filter(id => !shareDialogDefautValue.includes(id));
-
-		// find the users that were removed
-		const removed = shareDialogDefautValue.filter(id => !selectedUsers.includes(id));
 		try {
-			for (const addedUser of added) {
-				const res = await api.post(
-					`/files/${file.id}/share`,
-					{ target_user_id: parseInt(addedUser) },
-					{
-						headers: { "Content-Type": "application/json" },
-						withCredentials: true,
-					}
-				);
-				toast.success(res.data.message);
-			}
+			const userIdsAsNumbers = selectedUsers.map(id => parseInt(id, 10))
+			const res = await api.put(
+				`/files/${file.id}/shares`,
+				{ user_ids: userIdsAsNumbers },
+				{
+					headers: { "Content-Type": "application/json" },
+					withCredentials: true,
+				}
+			);
+			toast.success(res.data.message);
 
-			for (const removedUser of removed) {
-				const res = await api.delete(`/files/${file.id}/share/${removedUser}`, { withCredentials: true },
-				);
-				toast.success(res.data.message);
-			}
 		} catch (error: any) {
 			console.error(error);
 			toast.error(error.response?.data?.error || "Failed to share file");

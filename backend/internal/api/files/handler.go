@@ -37,8 +37,7 @@ func (h *FileHandler) RegisterRoutes(r chi.Router) {
 	r.Patch("/files/{id}/move", apphandler.MakeHTTPHandler(h.MoveFile))
 
 	r.Get("/files/{id}/share-info", apphandler.MakeHTTPHandler(h.GetShareInfo))
-	r.Delete("/files/{id}/share/{userid}", apphandler.MakeHTTPHandler(h.UnshareFile))
-	r.Post("/files/{id}/share", apphandler.MakeHTTPHandler(h.ShareFile))
+	r.Put("/files/{id}/shares", apphandler.MakeHTTPHandler(h.UpdateFileShares))
 }
 
 func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) error {
@@ -241,42 +240,6 @@ func (h *FileHandler) UpdateFilename(w http.ResponseWriter, r *http.Request) err
 	return util.WriteJSON(w, http.StatusOK, file)
 }
 
-type ShareFileRequest struct {
-	TargetUserID int64 `json:"target_user_id"`
-}
-
-func (h *FileHandler) ShareFile(w http.ResponseWriter, r *http.Request) error {
-	fileID, _ := uuid.Parse(chi.URLParam(r, "id"))
-
-	var req ShareFileRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		return apierror.NewBadRequestError("Invalid Request Body")
-	}
-
-	log.Printf("Received request to share file %s to: %d", fileID, req.TargetUserID)
-	if err := h.service.ShareFile(r.Context(), fileID, req.TargetUserID); err != nil {
-		return err
-	}
-
-	return util.WriteJSON(w, http.StatusOK, map[string]string{"message": "Shared file successfully"})
-}
-
-func (h *FileHandler) UnshareFile(w http.ResponseWriter, r *http.Request) error {
-	fileID, _ := uuid.Parse(chi.URLParam(r, "id"))
-	targetUserID, err := strconv.Atoi(chi.URLParam(r, "userid"))
-	if err != nil {
-		return apierror.NewBadRequestError("Invalid UserID")
-	}
-
-	log.Printf("Received request to unshare file %s from: %d", fileID, targetUserID)
-	if err := h.service.RemoveFileShare(r.Context(), fileID, int64(targetUserID)); err != nil {
-		return err
-	}
-
-	return util.WriteJSON(w, http.StatusOK, map[string]string{"message": "Unshared file successfully"})
-}
-
 type ListAllFilesResponse struct {
 	ID            string    `json:"id"`
 	Filename      string    `json:"filename"`
@@ -384,4 +347,31 @@ func (h *FileHandler) MoveFile(w http.ResponseWriter, r *http.Request) error {
 	log.Println(req)
 
 	return h.service.MoveFile(r.Context(), fileID, req)
+}
+
+type updateSharesPayload struct {
+	UserIDs []int64 `json:"user_ids"`
+}
+
+func (h *FileHandler) UpdateFileShares(w http.ResponseWriter, r *http.Request) error {
+	fileID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		return apierror.NewBadRequestError("Invalid file ID")
+	}
+
+	var payload updateSharesPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		return apierror.NewBadRequestError("Invalid request body")
+	}
+
+	req := UpdateFileSharesRequest{
+		FileID:  fileID,
+		UserIDs: payload.UserIDs,
+	}
+
+	if err := h.service.UpdateFileShares(r.Context(), req); err != nil {
+		return err
+	}
+
+	return util.WriteJSON(w, http.StatusOK, map[string]string{"message": "File sharing updated successfully"})
 }

@@ -5,16 +5,34 @@ import (
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db/sqlc"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Repository struct {
+	pool    *pgxpool.Pool
 	queries *sqlc.Queries
 }
 
-func NewRepository(db *sqlc.Queries) *Repository {
+func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{
-		queries: db,
+		pool:    pool,
+		queries: sqlc.New(pool),
+	}
+}
+
+// BeginTx starts a new database transaction.
+func (r *Repository) BeginTx(ctx context.Context) (pgx.Tx, error) {
+	return r.pool.Begin(ctx)
+}
+
+// WithTx returns a new repository instance with its queries scoped to the provided transaction.
+func (r *Repository) WithTx(tx pgx.Tx) *Repository {
+	// We return a pointer to a new repository struct
+	return &Repository{
+		pool:    r.pool,
+		queries: r.queries.WithTx(tx),
 	}
 }
 
@@ -55,13 +73,6 @@ func (r *Repository) ListFilesByOwner(ctx context.Context, ownerID int64, search
 	})
 }
 
-func (r *Repository) CreateFileShare(ctx context.Context, fileID uuid.UUID, targetUserID int64) (sqlc.FileShare, error) {
-	return r.queries.CreateFileShare(ctx, sqlc.CreateFileShareParams{
-		FileID:     fileID,
-		SharedWith: targetUserID,
-	})
-}
-
 func (r *Repository) DeleteFile(ctx context.Context, fileID uuid.UUID) error {
 	return r.queries.DeleteFile(ctx, fileID)
 }
@@ -81,13 +92,6 @@ func (r *Repository) UpdateFilename(ctx context.Context, arg sqlc.UpdateFilename
 
 func (r *Repository) DoesUserExist(ctx context.Context, userID int64) (bool, error) {
 	return r.queries.UserExists(ctx, userID)
-}
-
-func (r *Repository) DeleteFileShare(ctx context.Context, fileID uuid.UUID, sharedWith int64) error {
-	return r.queries.DeleteFileShare(ctx, sqlc.DeleteFileShareParams{
-		FileID:     fileID,
-		SharedWith: sharedWith,
-	})
 }
 
 func (r *Repository) ListUsersWithAccessToFile(ctx context.Context, fileID uuid.UUID) ([]sqlc.ListUsersWithAccessToFileRow, error) {
@@ -142,4 +146,12 @@ func (r *Repository) DeleteBlobIfUnused(ctx context.Context, blobID uuid.UUID) (
 
 func (r *Repository) UpdateFileFolder(ctx context.Context, arg sqlc.UpdateFileFolderParams) error {
 	return r.queries.UpdateFileFolder(ctx, arg)
+}
+
+func (r *Repository) DeleteAllSharesForFile(ctx context.Context, fileID uuid.UUID) error {
+	return r.queries.DeleteAllSharesForFile(ctx, fileID)
+}
+
+func (r *Repository) AddSharesToFile(ctx context.Context, arg []sqlc.AddSharesToFileParams) (int64, error) {
+	return r.queries.AddSharesToFile(ctx, arg)
 }

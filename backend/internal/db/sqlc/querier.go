@@ -11,17 +11,17 @@ import (
 )
 
 type Querier interface {
+	AddSharesToFile(ctx context.Context, arg []AddSharesToFileParams) (int64, error)
 	CreateBlob(ctx context.Context, arg CreateBlobParams) (Blob, error)
 	CreateFile(ctx context.Context, arg CreateFileParams) (File, error)
-	CreateFileShare(ctx context.Context, arg CreateFileShareParams) (FileShare, error)
 	CreateFolder(ctx context.Context, arg CreateFolderParams) (Folder, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DecrementBlobRefcount(ctx context.Context, id uuid.UUID) (int32, error)
+	DeleteAllSharesForFile(ctx context.Context, fileID uuid.UUID) error
 	DeleteBlob(ctx context.Context, id uuid.UUID) error
 	DeleteBlobIfUnused(ctx context.Context, id uuid.UUID) (string, error)
 	DeleteBlobsByStoragePaths(ctx context.Context, storagePaths []string) error
 	DeleteFile(ctx context.Context, id uuid.UUID) error
-	DeleteFileShare(ctx context.Context, arg DeleteFileShareParams) error
 	DeleteFolder(ctx context.Context, id uuid.UUID) error
 	GetBlobByID(ctx context.Context, id uuid.UUID) (Blob, error)
 	GetBlobBySha(ctx context.Context, sha256 string) (Blob, error)

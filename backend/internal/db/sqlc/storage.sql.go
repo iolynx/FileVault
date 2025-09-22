@@ -13,6 +13,11 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AddSharesToFileParams struct {
+	FileID     uuid.UUID `json:"file_id"`
+	SharedWith int64     `json:"shared_with"`
+}
+
 const createBlob = `-- name: CreateBlob :one
 INSERT INTO blobs (sha256, storage_path, size, mime_type, refcount)
 VALUES ($1, $2, $3, $4, $5)
@@ -89,30 +94,6 @@ func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) (File, e
 	return i, err
 }
 
-const createFileShare = `-- name: CreateFileShare :one
-INSERT INTO file_shares (file_id, shared_with)
-VALUES ($1, $2)
-RETURNING id, file_id, shared_with, permission, created_at
-`
-
-type CreateFileShareParams struct {
-	FileID     uuid.UUID `json:"file_id"`
-	SharedWith int64     `json:"shared_with"`
-}
-
-func (q *Queries) CreateFileShare(ctx context.Context, arg CreateFileShareParams) (FileShare, error) {
-	row := q.db.QueryRow(ctx, createFileShare, arg.FileID, arg.SharedWith)
-	var i FileShare
-	err := row.Scan(
-		&i.ID,
-		&i.FileID,
-		&i.SharedWith,
-		&i.Permission,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
 const decrementBlobRefcount = `-- name: DecrementBlobRefcount :one
 UPDATE blobs SET refcount = refcount - 1
 WHERE id = $1
@@ -124,6 +105,16 @@ func (q *Queries) DecrementBlobRefcount(ctx context.Context, id uuid.UUID) (int3
 	var refcount int32
 	err := row.Scan(&refcount)
 	return refcount, err
+}
+
+const deleteAllSharesForFile = `-- name: DeleteAllSharesForFile :exec
+DELETE FROM file_shares
+WHERE file_id = $1
+`
+
+func (q *Queries) DeleteAllSharesForFile(ctx context.Context, fileID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteAllSharesForFile, fileID)
+	return err
 }
 
 const deleteBlob = `-- name: DeleteBlob :exec
@@ -166,21 +157,6 @@ WHERE id = $1
 
 func (q *Queries) DeleteFile(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteFile, id)
-	return err
-}
-
-const deleteFileShare = `-- name: DeleteFileShare :exec
-DELETE FROM file_shares
-WHERE file_id = $1 AND shared_with = $2
-`
-
-type DeleteFileShareParams struct {
-	FileID     uuid.UUID `json:"file_id"`
-	SharedWith int64     `json:"shared_with"`
-}
-
-func (q *Queries) DeleteFileShare(ctx context.Context, arg DeleteFileShareParams) error {
-	_, err := q.db.Exec(ctx, deleteFileShare, arg.FileID, arg.SharedWith)
 	return err
 }
 

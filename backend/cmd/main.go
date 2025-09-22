@@ -58,7 +58,7 @@ func main() {
 	folderHandler := folders.NewHandler(folderService)
 
 	// Initialize Files Repository, Service, Handler
-	fileRepo := files.NewRepository(dbRepo)
+	fileRepo := files.NewRepository(pool)
 	fileService := files.NewService(fileRepo, userRepo, folderRepo, store)
 	fileHandler := files.NewFileHandler(fileService)
 
