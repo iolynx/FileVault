@@ -12,7 +12,7 @@ import (
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, name, password, created_at, storage_quota)
 VALUES ($1, $2, $3, NOW(), $4)
-RETURNING id, name, email, password, role, created_at, original_storage_bytes, dedup_storage_bytes, storage_quota
+RETURNING id, name, email, password, role, created_at, storage_quota, storage_used
 `
 
 type CreateUserParams struct {
@@ -37,15 +37,29 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Password,
 		&i.Role,
 		&i.CreatedAt,
-		&i.OriginalStorageBytes,
-		&i.DedupStorageBytes,
 		&i.StorageQuota,
+		&i.StorageUsed,
 	)
 	return i, err
 }
 
+const getDeduplicatedUsage = `-- name: GetDeduplicatedUsage :one
+SELECT COALESCE(SUM(b.size), 0)::BIGINT
+FROM blobs b
+WHERE b.id IN (
+    SELECT DISTINCT blob_id FROM files WHERE owner_id = $1
+)
+`
+
+func (q *Queries) GetDeduplicatedUsage(ctx context.Context, ownerID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, getDeduplicatedUsage, ownerID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, name, email, password, role, created_at, original_storage_bytes, dedup_storage_bytes, storage_quota FROM users WHERE email = $1
+SELECT id, name, email, password, role, created_at, storage_quota, storage_used FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -58,15 +72,14 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Password,
 		&i.Role,
 		&i.CreatedAt,
-		&i.OriginalStorageBytes,
-		&i.DedupStorageBytes,
 		&i.StorageQuota,
+		&i.StorageUsed,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, name, email, password, role, created_at, original_storage_bytes, dedup_storage_bytes, storage_quota FROM users WHERE id = $1
+SELECT id, name, email, password, role, created_at, storage_quota, storage_used FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
@@ -79,9 +92,8 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.Password,
 		&i.Role,
 		&i.CreatedAt,
-		&i.OriginalStorageBytes,
-		&i.DedupStorageBytes,
 		&i.StorageQuota,
+		&i.StorageUsed,
 	)
 	return i, err
 }

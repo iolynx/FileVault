@@ -67,12 +67,11 @@ func NewService(filesRepo *Repository, usersRepo *users.Repository, storage stor
 }
 
 func (s *Service) UploadFile(ctx context.Context, file multipart.File, header *multipart.FileHeader, folderID *uuid.UUID) (sqlc.File, error) {
-	// Ownership check
+	// Ownership checks
 	ownerID, ok := userctx.GetUserID(ctx)
 	if !ok {
 		return sqlc.File{}, apierror.NewUnauthorizedError()
 	}
-
 	if folderID != nil {
 		folder, err := s.repo.GetFolderByID(ctx, *folderID)
 		if err != nil {
@@ -91,8 +90,10 @@ func (s *Service) UploadFile(ctx context.Context, file multipart.File, header *m
 	}
 	sha := hex.EncodeToString(hasher.Sum(nil))
 
+	var blob sqlc.Blob
+
 	// Check if blob exists
-	blob, err := s.repo.GetBlobBySha(ctx, sha)
+	existingBlob, err := s.repo.GetBlobBySha(ctx, sha)
 	if err != nil && err != pgx.ErrNoRows {
 		return sqlc.File{}, apierror.NewInternalServerError("Failed to check for existing blob")
 	}
@@ -100,78 +101,56 @@ func (s *Service) UploadFile(ctx context.Context, file multipart.File, header *m
 	if err == nil {
 		// Existing blob: update refcount
 		log.Print("blob already exists, updating refcount")
-		if _, err := s.repo.IncrementBlobRefcount(ctx, blob.ID); err != nil {
-			return sqlc.File{}, err
+		blob = existingBlob
+	} else {
+		user, err := s.usersRepo.GetUserByID(ctx, ownerID)
+		if err != nil {
+			return sqlc.File{}, apierror.NewInternalServerError("Could not retrieve user data")
+		}
+		newBlobSize := int64(len(buf))
+		log.Println("storage quota and blobsize:")
+		log.Print(user.StorageQuota, newBlobSize)
+		if user.StorageUsed+newBlobSize > user.StorageQuota {
+			return sqlc.File{}, apierror.New(http.StatusRequestEntityTooLarge, "Storage quota exceeded")
 		}
 
-		// Update Original Storage value for User (without deduplication)
-		err = s.repo.IncrementUserStorage(ctx, ownerID, int(blob.Size), 0)
+		// Upload to MinIO
+		storagePath := fmt.Sprintf("%s_%s", sha, header.Filename)
+		reader := bytes.NewReader(buf)
+		_, err = s.storage.UploadBlob(ctx, reader, storagePath, newBlobSize, header.Header.Get("Content-Type"))
 		if err != nil {
 			return sqlc.File{}, err
 		}
+		log.Print("Uploaded Blob to storage")
 
-		params := sqlc.CreateFileParams{
-			OwnerID:      ownerID,
-			BlobID:       blob.ID,
-			Filename:     header.Filename,
-			DeclaredMime: util.NewText(header.Header.Get("Content-Type")),
-			Size:         blob.Size,
+		// Create blob record in DB with refcount=0. The trigger will increment it.
+		blobParams := sqlc.CreateBlobParams{
+			Sha256:      sha,
+			StoragePath: storagePath,
+			Size:        newBlobSize,
+			MimeType:    util.NewText(header.Header.Get("Content-Type")),
 		}
-		if folderID != nil {
-			params.FolderID = pgtype.UUID{Bytes: *folderID, Valid: true}
+		newBlob, err := s.repo.CreateBlob(ctx, blobParams)
+		if err != nil {
+			return sqlc.File{}, err
 		}
-		// Create file record pointing to existing blob
-		log.Println("creating with these params:")
-		log.Print(params)
-		return s.repo.CreateFile(ctx, params)
-	} else {
-
+		log.Print("Created Blob record in db")
+		blob = newBlob
 	}
 
-	// New blob: upload to storage with this objectKey after checking storage quota
-	// Get this user's storage quota
-	user, err := s.usersRepo.GetUserByID(ctx, ownerID)
-	if err != nil {
-		return sqlc.File{}, apierror.NewInternalServerError("Could not retrieve internal data")
-	}
-	// Get this blob's size, return HTTP 413 "Payload Too Large" used for StorageQuota errors
-	newBlobSize := int64(len(buf))
-	if user.DedupStorageBytes+newBlobSize > user.StorageQuota {
-		return sqlc.File{}, apierror.New(http.StatusRequestEntityTooLarge, "Storage quota exceeded")
-	}
-
-	objectKey := fmt.Sprintf("%s_%s", sha, header.Filename)
-	reader := bytes.NewReader(buf)
-	_, err = s.storage.UploadBlob(ctx, reader, objectKey, int64(len(buf)), header.Header.Get("Content-Type"))
-	if err != nil {
-		return sqlc.File{}, err
-	}
-	log.Print("Uploaded Blob")
-
-	// Create blob record
-	newBlob, err := s.repo.CreateBlob(ctx, sha, objectKey, header.Header.Get("Content-Type"), int64(len(buf)))
-	if err != nil {
-		return sqlc.File{}, err
-	}
-	log.Print("Created Blob record in db")
-
-	// Update Original & Deduplicated storage value for user
-	s.repo.IncrementUserStorage(ctx, ownerID, int(newBlob.Size), int(newBlob.Size))
-
-	// Create file record referencing blob
-	params := sqlc.CreateFileParams{
+	fileParams := sqlc.CreateFileParams{
 		OwnerID:      ownerID,
-		BlobID:       newBlob.ID,
+		BlobID:       blob.ID,
 		Filename:     header.Filename,
 		DeclaredMime: util.NewText(header.Header.Get("Content-Type")),
-		Size:         newBlobSize,
+		Size:         blob.Size,
 	}
 	if folderID != nil {
-		params.FolderID = pgtype.UUID{Bytes: *folderID, Valid: true}
+		fileParams.FolderID = pgtype.UUID{Bytes: *folderID, Valid: true}
 	}
-	log.Println("creating with these params:")
-	log.Print(params)
-	return s.repo.CreateFile(ctx, params)
+
+	log.Println("Creating file record with params:", fileParams)
+	return s.repo.CreateFile(ctx, fileParams)
 }
 
 // ListFiles returns a list of files owned by a particular User
@@ -261,53 +240,39 @@ func (s *Service) DeleteFile(ctx context.Context, fileID uuid.UUID) error {
 
 	file, err := s.repo.GetFileByUUID(ctx, fileID)
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return apierror.NewNotFoundError("File")
+		}
 		return err
 	}
 
-	// ownership check
+	// Ownership check
 	if file.OwnerID != userID {
 		return apierror.NewForbiddenError()
 	}
 
 	// delete the file record
 	if err := s.repo.DeleteFile(ctx, fileID); err != nil {
-		return err
+		log.Printf("error while trying to delete file: %v", err)
+		return apierror.NewInternalServerError("Failed to delete file record")
 	}
 
-	// decrement blob refcount
-	refCount, err := s.repo.DecrementBlobRefCount(ctx, file.BlobID)
+	storagePath, err := s.repo.DeleteBlobIfUnused(ctx, file.BlobID)
 	if err != nil {
-		return err
+		if err == pgx.ErrNoRows {
+			log.Printf("Blob %s is still referenced, not deleting from storage.", file.BlobID)
+			return nil
+		}
+		return apierror.NewInternalServerError("Failed to clean up blob record")
 	}
 
-	// Unreferenced blob: delete blob, db row
-	if refCount == 0 {
-		log.Print("refcount is 0, deleting blob")
-		blob, err := s.repo.GetBlobByID(ctx, file.BlobID)
-		if err != nil {
-			return err
-		}
-		if err := s.storage.DeleteBlob(ctx, blob.StoragePath); err != nil {
-			return err
-		}
-		if err := s.repo.DeleteBlobIfUnused(ctx, file.BlobID); err != nil {
-			return err
-		}
-
-		// Decrement storage value for user
-		err = s.repo.DecrementUserStorage(ctx, userID, int(blob.Size), int(blob.Size))
-		if err != nil {
-			return err
-		}
-	} else {
-		// Decrement storage value for user
-		err = s.repo.DecrementUserStorage(ctx, userID, int(file.Size), 0)
-		if err != nil {
-			return err
-		}
+	log.Printf("Blob %s is unreferenced, deleting object %s from storage.", file.BlobID, storagePath)
+	if err := s.storage.DeleteBlob(ctx, storagePath); err != nil {
+		// Critical error: The DB record is gone, but the physical file remains.
+		log.Printf("CRITICAL: Failed to delete object %s from storage: %v", storagePath, err)
 	}
 
-	log.Print("deleted file")
+	log.Printf("Successfully deleted file %s", fileID)
 	return nil
 }
 

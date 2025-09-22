@@ -21,7 +21,6 @@ export const mimeTypeOptions = [
 	{ value: 'application/xml', label: 'XML File' },
 	{ value: 'text/html', label: 'HTML Document' },
 	{ value: 'text/css', label: 'CSS Stylesheet' },
-	{ value: 'application/javascript', label: 'JavaScript File' },
 	{ value: 'application/json', label: 'JSON File' },
 	{ value: 'application/xml', label: 'XML File' },
 	{ value: 'image/webp', label: 'WebP Image' },

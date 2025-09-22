@@ -15,6 +15,7 @@ interface ContentState {
 	contents: ContentItem[];
 	totalCount: number;
 	isLoading: boolean;
+	setLoading: (loading: boolean) => void;
 	fetchContents: (folderId: string | null, filters: any, pagination: { pageIndex: number, pageSize: number }) => Promise<void>;
 	navigateToFolder: (folder: { id: string; filename: string }) => void;
 	navigateToPathIndex: (index: number) => void;
@@ -88,6 +89,11 @@ export const useContentStore = create<ContentState>((set, get) => ({
 	navigateToPathIndex: (index) => {
 		const newPath = get().path.slice(0, index + 1);
 		set({ path: newPath });
+	},
+
+	// sets loading to true
+	setLoading: (loading: boolean) => {
+		set((state) => ({ isLoading: loading }));
 	},
 
 	// Resets to initial state

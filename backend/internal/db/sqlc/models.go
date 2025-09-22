@@ -52,13 +52,12 @@ type Folder struct {
 }
 
 type User struct {
-	ID                   int64            `json:"id"`
-	Name                 string           `json:"name"`
-	Email                string           `json:"email"`
-	Password             string           `json:"password"`
-	Role                 string           `json:"role"`
-	CreatedAt            pgtype.Timestamp `json:"created_at"`
-	OriginalStorageBytes int64            `json:"original_storage_bytes"`
-	DedupStorageBytes    int64            `json:"dedup_storage_bytes"`
-	StorageQuota         int64            `json:"storage_quota"`
+	ID           int64            `json:"id"`
+	Name         string           `json:"name"`
+	Email        string           `json:"email"`
+	Password     string           `json:"password"`
+	Role         string           `json:"role"`
+	CreatedAt    pgtype.Timestamp `json:"created_at"`
+	StorageQuota int64            `json:"storage_quota"`
+	StorageUsed  int64            `json:"storage_used"`
 }

@@ -44,13 +44,18 @@ export default function FileActionsDropdown({ file }: ActionsDropDownProps) {
 			const res = await api.get(`/files/${file.id}/share-info`,
 				{ withCredentials: true },
 			)
+
+			// Set the default valuel of the Share Dialog (the users the file is already shared with)
 			const usersWithAccessToFile: User[] = await res.data.sharedWith;
-			console.log('shared with: ', res.data.sharedWith);
-			console.log('users:', res.data.allUsers);
 			const userIds = usersWithAccessToFile.map((user) => user.id);
 			setShareDialogDefaultValue(userIds);
+
+			// Set the value of the Share URL
 			setShareDialogURL(res.data.shareURL);
+
+			// Set the value of the list of all possible users the file can be shared with
 			setShareDialogOptions(mapUsersToOptions(res.data.allUsers));
+
 		} catch (error) {
 			console.log("error while fetching users with access to file: ", error)
 		}

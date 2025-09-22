@@ -128,32 +128,36 @@ func (s *Service) DeleteFolder(ctx context.Context, folderID uuid.UUID) error {
 	}
 
 	// get all object keys for files within this folder and its subfolders
-	storagePaths, err := s.repo.GetObjectKeysInFolderHierarchy(ctx, folderID)
+	blobIDs, err := s.repo.GetBlobIDsInFolderHierarchy(ctx, folderID)
 	if err != nil && err != pgx.ErrNoRows {
 		return apierror.NewInternalServerError("Could not retrieve files for deletion")
 	}
 
-	// Delete the actual objects from MinIO storage
-	if len(storagePaths) > 0 {
-		err = s.storage.DeleteBlobs(ctx, storagePaths)
-		if err != nil {
-			return apierror.NewInternalServerError("Failed to delete files from storage")
-		}
-	}
-
 	// Delete the folder record from the database
 	// ON DELETE CASCADE deletes all subfolders and file records automatically
-	err = s.repo.DeleteFolder(ctx, folderID)
-	if err != nil {
+	if err = s.repo.DeleteFolder(ctx, folderID); err != nil {
 		return apierror.NewInternalServerError("Failed to delete folder from database")
 	}
+	log.Printf("Deleted folder %s and all its contents from database records.", folderID)
 
-	if len(storagePaths) > 0 {
-		err = s.repo.queries.DeleteBlobsByStoragePaths(ctx, storagePaths)
+	// Checking blobs for cleanup
+	log.Printf("Checking %d blobs for cleanup...", len(blobIDs))
+	for _, blobID := range blobIDs {
+		storagePath, err := s.repo.queries.DeleteBlobIfUnused(ctx, blobID)
 		if err != nil {
-			log.Printf("Could not delete some blobs records: %v", err)
+			if err == pgx.ErrNoRows {
+				// the blob is still referenced by another file, we do nothing.
+				continue
+			}
+			log.Printf("Error during blob cleanup for %s: %v", blobID, err)
+			continue
+		}
+
+		// The blob record has been deleted, and we can safely delete from storage.
+		log.Printf("Blob %s is now unreferenced, deleting object %s from storage.", blobID, storagePath)
+		if err := s.storage.DeleteBlob(ctx, storagePath); err != nil {
+			log.Printf("CRITICAL: Failed to delete object %s from storage: %v", storagePath, err)
 		}
 	}
-
 	return nil
 }

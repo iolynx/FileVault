@@ -17,25 +17,24 @@ type Querier interface {
 	CreateFolder(ctx context.Context, arg CreateFolderParams) (Folder, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DecrementBlobRefcount(ctx context.Context, id uuid.UUID) (int32, error)
-	DecrementUserStorage(ctx context.Context, arg DecrementUserStorageParams) error
 	DeleteBlob(ctx context.Context, id uuid.UUID) error
-	DeleteBlobIfUnused(ctx context.Context, id uuid.UUID) error
+	DeleteBlobIfUnused(ctx context.Context, id uuid.UUID) (string, error)
 	DeleteBlobsByStoragePaths(ctx context.Context, storagePaths []string) error
 	DeleteFile(ctx context.Context, id uuid.UUID) error
 	DeleteFileShare(ctx context.Context, arg DeleteFileShareParams) error
 	DeleteFolder(ctx context.Context, id uuid.UUID) error
 	GetBlobByID(ctx context.Context, id uuid.UUID) (Blob, error)
 	GetBlobBySha(ctx context.Context, sha256 string) (Blob, error)
+	GetBlobIDsInFolderHierarchy(ctx context.Context, id uuid.UUID) ([]uuid.UUID, error)
+	GetDeduplicatedUsage(ctx context.Context, ownerID int64) (int64, error)
 	GetFileByUUID(ctx context.Context, id uuid.UUID) (File, error)
 	GetFilesForUser(ctx context.Context, arg GetFilesForUserParams) ([]GetFilesForUserRow, error)
 	GetFilesForUserCount(ctx context.Context, arg GetFilesForUserCountParams) (int64, error)
 	GetFolderByID(ctx context.Context, id uuid.UUID) (Folder, error)
-	GetObjectKeysInFolderHierarchy(ctx context.Context, id uuid.UUID) ([]string, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	IncrementBlobRefcount(ctx context.Context, id uuid.UUID) (int32, error)
 	IncrementFileDownloadCount(ctx context.Context, id uuid.UUID) error
-	IncrementUserStorage(ctx context.Context, arg IncrementUserStorageParams) error
 	ListAllFiles(ctx context.Context, arg ListAllFilesParams) ([]ListAllFilesRow, error)
 	ListFilesByOwner(ctx context.Context, arg ListFilesByOwnerParams) ([]ListFilesByOwnerRow, error)
 	ListFilesForUser(ctx context.Context, arg ListFilesForUserParams) ([]ListFilesForUserRow, error)

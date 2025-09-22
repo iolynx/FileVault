@@ -128,7 +128,7 @@ func (h *Handler) GetOtherUsers(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) error {
-	user, err := h.service.GetUserByID(r.Context())
+	user, err := h.service.GetMe(r.Context())
 	if err != nil {
 		return err
 	}

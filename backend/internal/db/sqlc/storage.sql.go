@@ -126,24 +126,6 @@ func (q *Queries) DecrementBlobRefcount(ctx context.Context, id uuid.UUID) (int3
 	return refcount, err
 }
 
-const decrementUserStorage = `-- name: DecrementUserStorage :exec
-UPDATE users
-SET original_storage_bytes = GREATEST(original_storage_bytes - $2, 0),
-    dedup_storage_bytes = GREATEST(dedup_storage_bytes - $3, 0)
-WHERE id = $1
-`
-
-type DecrementUserStorageParams struct {
-	ID                   int64 `json:"id"`
-	OriginalStorageBytes int64 `json:"original_storage_bytes"`
-	DedupStorageBytes    int64 `json:"dedup_storage_bytes"`
-}
-
-func (q *Queries) DecrementUserStorage(ctx context.Context, arg DecrementUserStorageParams) error {
-	_, err := q.db.Exec(ctx, decrementUserStorage, arg.ID, arg.OriginalStorageBytes, arg.DedupStorageBytes)
-	return err
-}
-
 const deleteBlob = `-- name: DeleteBlob :exec
 DELETE FROM blobs
 WHERE id = $1
@@ -154,13 +136,17 @@ func (q *Queries) DeleteBlob(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const deleteBlobIfUnused = `-- name: DeleteBlobIfUnused :exec
-DELETE FROM blobs WHERE id = $1 AND refcount <= 0
+const deleteBlobIfUnused = `-- name: DeleteBlobIfUnused :one
+DELETE FROM blobs 
+WHERE id = $1 AND refcount <= 0
+RETURNING storage_path
 `
 
-func (q *Queries) DeleteBlobIfUnused(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteBlobIfUnused, id)
-	return err
+func (q *Queries) DeleteBlobIfUnused(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, deleteBlobIfUnused, id)
+	var storage_path string
+	err := row.Scan(&storage_path)
+	return storage_path, err
 }
 
 const deleteBlobsByStoragePaths = `-- name: DeleteBlobsByStoragePaths :exec
@@ -234,6 +220,39 @@ func (q *Queries) GetBlobBySha(ctx context.Context, sha256 string) (Blob, error)
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const getBlobIDsInFolderHierarchy = `-- name: GetBlobIDsInFolderHierarchy :many
+WITH RECURSIVE folder_hierarchy AS (
+    -- This part is correct and finds all sub-folder IDs
+    SELECT fo.id FROM folders fo WHERE fo.id = $1
+    UNION ALL
+    SELECT f.id FROM folders f
+    INNER JOIN folder_hierarchy fh ON f.parent_folder_id = fh.id
+)
+SELECT DISTINCT f.blob_id
+FROM files f
+WHERE f.folder_id IN (SELECT id FROM folder_hierarchy)
+`
+
+func (q *Queries) GetBlobIDsInFolderHierarchy(ctx context.Context, id uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, getBlobIDsInFolderHierarchy, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var blob_id uuid.UUID
+		if err := rows.Scan(&blob_id); err != nil {
+			return nil, err
+		}
+		items = append(items, blob_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getFileByUUID = `-- name: GetFileByUUID :one
@@ -340,39 +359,6 @@ func (q *Queries) GetFilesForUserCount(ctx context.Context, arg GetFilesForUserC
 	return count, err
 }
 
-const getObjectKeysInFolderHierarchy = `-- name: GetObjectKeysInFolderHierarchy :many
-WITH RECURSIVE folder_hierarchy AS (
-    SELECT fo.id FROM folders fo WHERE fo.id = $1
-    UNION ALL
-    SELECT f.id FROM folders f
-    INNER JOIN folder_hierarchy fh ON f.parent_folder_id = fh.id
-)
-SELECT b.storage_path
-FROM files f
-JOIN blobs b ON f.blob_id = b.id
-WHERE f.folder_id IN (SELECT id FROM folder_hierarchy)
-`
-
-func (q *Queries) GetObjectKeysInFolderHierarchy(ctx context.Context, id uuid.UUID) ([]string, error) {
-	rows, err := q.db.Query(ctx, getObjectKeysInFolderHierarchy, id)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []string{}
-	for rows.Next() {
-		var storage_path string
-		if err := rows.Scan(&storage_path); err != nil {
-			return nil, err
-		}
-		items = append(items, storage_path)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const incrementBlobRefcount = `-- name: IncrementBlobRefcount :one
 UPDATE blobs SET refcount = refcount + 1
 WHERE id = $1
@@ -394,24 +380,6 @@ WHERE id = $1
 
 func (q *Queries) IncrementFileDownloadCount(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, incrementFileDownloadCount, id)
-	return err
-}
-
-const incrementUserStorage = `-- name: IncrementUserStorage :exec
-UPDATE users
-SET original_storage_bytes = original_storage_bytes + $2,
-    dedup_storage_bytes = dedup_storage_bytes + $3
-WHERE id = $1
-`
-
-type IncrementUserStorageParams struct {
-	ID                   int64 `json:"id"`
-	OriginalStorageBytes int64 `json:"original_storage_bytes"`
-	DedupStorageBytes    int64 `json:"dedup_storage_bytes"`
-}
-
-func (q *Queries) IncrementUserStorage(ctx context.Context, arg IncrementUserStorageParams) error {
-	_, err := q.db.Exec(ctx, incrementUserStorage, arg.ID, arg.OriginalStorageBytes, arg.DedupStorageBytes)
 	return err
 }
 

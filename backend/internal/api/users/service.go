@@ -96,33 +96,56 @@ func (s *Service) ListOtherUsers(ctx context.Context, userID int64) ([]User, err
 	return otherUsers, nil
 }
 
-type Me struct {
-	ID                   int64  `json:"id"`
-	Email                string `json:"email"`
-	Name                 string `json:"name"`
-	Role                 string `json:"role"`
-	OriginalStorageBytes int64  `json:"original_storage_bytes"`
-	DedupStorageBytes    int64  `json:"dedup_storage_bytes"`
+type MeResponse struct {
+	ID                     int64   `json:"id"`
+	Email                  string  `json:"email"`
+	Name                   string  `json:"name"`
+	Role                   string  `json:"role"`
+	StorageUsedBytes       int64   `json:"storage_used_bytes"`       // "Original storage usage"
+	DeduplicatedUsageBytes int64   `json:"deduplicated_usage_bytes"` // "Total storage used (deduplicated)"
+	StorageQuotaBytes      int64   `json:"storage_quota_bytes"`
+	SavingsBytes           int64   `json:"savings_bytes"`
+	SavingsPercentage      float64 `json:"savings_percentage"`
 }
 
-func (s *Service) GetUserByID(ctx context.Context) (Me, error) {
+// GetMe is the complete service for the /auth/me endpoint
+// it returns the User info along with role, and storage statistics.
+func (s *Service) GetMe(ctx context.Context) (MeResponse, error) {
 	userID, ok := userctx.GetUserID(ctx)
 	if !ok {
-		return Me{}, apierror.NewUnauthorizedError()
+		return MeResponse{}, apierror.NewUnauthorizedError()
 	}
 
+	// Fetch the User record from the database.
 	user, err := s.repo.GetUserByID(ctx, userID)
 	if err != nil {
-		return Me{}, apierror.NewInternalServerError()
+		return MeResponse{}, apierror.NewInternalServerError("could not retrieve user data")
 	}
 
-	return Me{
-		ID:                   user.ID,
-		Email:                user.Email,
-		Name:                 user.Name,
-		Role:                 user.Role,
-		OriginalStorageBytes: user.OriginalStorageBytes,
-		DedupStorageBytes:    user.DedupStorageBytes,
-	}, nil
+	// The 'storage_used' column becomes the "Original Storage Usage"
+	originalUsage := user.StorageUsed
 
+	// we calculate "Deduplicated Storage Usage" with our new query
+	deduplicatedUsage, err := s.repo.GetDeduplicatedUsage(ctx, userID)
+	if err != nil {
+		return MeResponse{}, apierror.NewInternalServerError("could not calculate storage stats")
+	}
+
+	savingsBytes := originalUsage - deduplicatedUsage
+	savingsPercentage := 0.0
+	if originalUsage > 0 {
+		savingsPercentage = (float64(savingsBytes) / float64(originalUsage)) * 100
+	}
+
+	return MeResponse{
+		ID:                     user.ID,
+		Email:                  user.Email,
+		Name:                   user.Name,
+		Role:                   user.Role,
+		StorageUsedBytes:       originalUsage,
+		DeduplicatedUsageBytes: deduplicatedUsage,
+		StorageQuotaBytes:      user.StorageQuota,
+		SavingsBytes:           savingsBytes,
+		SavingsPercentage:      savingsPercentage,
+	}, nil
 }

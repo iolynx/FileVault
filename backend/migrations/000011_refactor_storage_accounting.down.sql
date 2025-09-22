@@ -1,0 +1,3 @@
+ALTER TABLE users DROP COLUMN IF EXISTS storage_used;
+ALTER TABLE users ADD COLUMN original_storage_bytes BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN dedup_storage_bytes BIGINT NOT NULL DEFAULT 0;

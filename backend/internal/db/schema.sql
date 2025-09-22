@@ -5,9 +5,8 @@ CREATE TABLE users (
     password TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'user',
     created_at TIMESTAMP DEFAULT NOW(),
-    original_storage_bytes BIGINT NOT NULL DEFAULT 0,
-    dedup_storage_bytes BIGINT NOT NULL DEFAULT 0,
-    storage_quota BIGINT NOT NULL DEFAULT 10000000
+    storage_quota BIGINT NOT NULL DEFAULT 10000000,
+    storage_used BIGINT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE blobs (

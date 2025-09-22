@@ -41,3 +41,7 @@ func (r *Repository) ListOtherUsers(ctx context.Context, userID int64) ([]sqlc.L
 func (r *Repository) GetUserByID(ctx context.Context, userID int64) (sqlc.User, error) {
 	return r.queries.GetUserByID(ctx, userID)
 }
+
+func (r *Repository) GetDeduplicatedUsage(ctx context.Context, userID int64) (int64, error) {
+	return r.queries.GetDeduplicatedUsage(ctx, userID)
+}

@@ -33,6 +33,6 @@ func (r *Repository) DeleteFolder(ctx context.Context, folderID uuid.UUID) error
 	return r.queries.DeleteFolder(ctx, folderID)
 }
 
-func (r *Repository) GetObjectKeysInFolderHierarchy(ctx context.Context, folderID uuid.UUID) ([]string, error) {
-	return r.queries.GetObjectKeysInFolderHierarchy(ctx, folderID)
+func (r *Repository) GetBlobIDsInFolderHierarchy(ctx context.Context, folderID uuid.UUID) ([]uuid.UUID, error) {
+	return r.queries.GetBlobIDsInFolderHierarchy(ctx, folderID)
 }

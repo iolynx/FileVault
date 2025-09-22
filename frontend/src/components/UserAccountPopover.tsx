@@ -15,46 +15,43 @@ import { useRouter } from 'next/navigation';
 import { useContentStore } from '@/stores/useContentStore';
 import { User } from '@/types/User';
 import { useAuthStore } from '@/stores/useAuthStore';
+import Link from 'next/link';
 
 
 export function UserAccountPopover() {
 	// Return an empty div if user data hasn't loaded yet
 	const user = useAuthStore((state) => state.user);
 
-	if (user === null || user === undefined || user.name === undefined) {
+	if (!user) {
 		return (
-			<Popover>
-
-			</Popover>
-		)
+			<Link href="/login" passHref legacyBehavior>
+				<Button asChild>
+					<a>Login</a>
+				</Button>
+			</Link>
+		);
 	}
 
 	const router = useRouter()
-	const dedupBytes = Number(user.dedup_storage_bytes ?? 0);
-	const originalBytes = Number(user.original_storage_bytes ?? 0);
+	const usedStoragePercentage = (user.deduplicated_usage_bytes / user.storage_quota_bytes) * 100;
+	const remainingBytes = Math.max(user.storage_quota_bytes - user.deduplicated_usage_bytes, 0);
 
-	const totalAllowedStorage = 10 * 1024 * 1024; // 10 MB in bytes
-
-	const usedStoragePercentage = (dedupBytes / totalAllowedStorage) * 100;
-	const remainingBytes = Math.max(totalAllowedStorage - dedupBytes, 0);
-	const savedBytes = Math.max(originalBytes - dedupBytes, 0);
-	const savingsPercentage = originalBytes > 0 ? (savedBytes / originalBytes) * 100 : 0;
-
-	const Logout = async () => {
+	const logout = async () => {
 		try {
-			const res = await api.post("/auth/logout")
+			await api.post("/auth/logout");
 		} catch (error) {
-			console.log("Error trying to logout: ", error)
+			console.log("Error trying to logout: ", error);
 		} finally {
-			useContentStore.getState().reset();
-			router.push("/login")
+			useAuthStore.getState().setUser(null); // Clear the auth store
+			useContentStore.getState().reset(); // Reset content
+			router.push("/login");
 		}
-	}
+	};
 
 	return (
 		<Popover>
 			<PopoverTrigger asChild className='m-3'>
-				<Avatar className="cursor-pointer ">
+				<Avatar className="cursor-pointer">
 					<AvatarFallback>
 						{user.name.charAt(0).toUpperCase()}
 					</AvatarFallback>
@@ -85,25 +82,25 @@ export function UserAccountPopover() {
 						<div className="space-y-2 text-sm">
 							<div className="flex justify-between">
 								<span className="text-muted-foreground">Total used (deduplicated)</span>
-								<span className="font-semibold">{formatBytes(dedupBytes)}</span>
+								<span className="font-semibold">{formatBytes(user.deduplicated_usage_bytes)}</span>
 							</div>
 							<div className="flex justify-between">
 								<span className="text-muted-foreground">Original storage usage</span>
-								<span className="font-semibold">{formatBytes(originalBytes)}</span>
+								<span className="font-semibold">{formatBytes(user.storage_used_bytes)}</span>
 							</div>
 							<div className="flex justify-between">
 								<span className="text-muted-foreground">Storage savings</span>
 								<span className="font-semibold text-green-600">
-									{formatBytes(savedBytes)} ({savingsPercentage.toFixed(1)}%)
+									{formatBytes(user.savings_bytes)} ({user.savings_percentage.toFixed(1)}%)
 								</span>
 							</div>
 							<div className='flex justify-around mt-4'>
-								<Button variant="outline" onClick={() => Logout()}>Logout</Button>
+								<Button variant="outline" onClick={logout}>Logout</Button>
 							</div>
 						</div>
 					</div>
 				</div>
 			</PopoverContent>
-		</Popover >
+		</Popover>
 	);
 }

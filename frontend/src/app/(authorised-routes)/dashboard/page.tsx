@@ -18,6 +18,7 @@ import { useFileUploader } from "@/hooks/useFileUploader";
 import { SortConfig } from "@/types/Sort";
 import { DataTablePagination } from '@/components/DataTablePagination';
 import { useDebounce } from "@/hooks/useDebounce";
+import FilesSkeleton from "@/components/FilesSkeleton";
 
 const filterOptions: FilterOption[] = [
 	{ value: 'content_type', label: 'MIME Type' },
@@ -27,7 +28,7 @@ const filterOptions: FilterOption[] = [
 ];
 
 const DashboardPage = () => {
-	const { contents, path, isLoading, totalCount, fetchContents } = useContentStore();
+	const { contents, path, isLoading, setLoading, totalCount, fetchContents } = useContentStore();
 
 	const [activeFilters, setActiveFilters] = useState<ActiveFilter[]>([]);
 	const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'uploaded_at', direction: 'desc' });
@@ -41,6 +42,7 @@ const DashboardPage = () => {
 
 
 	const handleFilterChange = (column: string, value: string | Date | undefined) => {
+		setLoading(true);
 		setActiveFilters(prevFilters => {
 			const existingFilterIndex = prevFilters.findIndex(f => f.column === column);
 
@@ -131,6 +133,7 @@ const DashboardPage = () => {
 	})
 
 	const handleSort = (key: string) => {
+		setLoading(true)
 		setSortConfig(prevConfig => {
 			// If clicking the same key, toggle direction; otherwise, reset to 'asc'
 			const direction = prevConfig.key === key && prevConfig.direction === 'asc' ? 'desc' : 'asc';
@@ -145,7 +148,7 @@ const DashboardPage = () => {
 			<DropzoneOverlay isDragging={isDragging} />
 
 			<div className="flex flex-col items-center">
-				<div className="flex flex-col items-center my-10">
+				<div className="flex flex-col items-center my-6">
 					<h1 className="text-3xl font-bold"> Dashboard </h1>
 					<p> View and Manage your files here.</p>
 				</div>
@@ -164,10 +167,11 @@ const DashboardPage = () => {
 				</div>
 
 				{isLoading ?
-					<Skeleton className="h-[500px] w-[86%] rounded-2xl max-w-7xl mt-4" /> :
-					<>
+					<FilesSkeleton />
+					:
+					<div className="flex flex-col p-0 m-0">
 						<Breadcrumbs />
-						<Card className="rounded-2xl border shadow-sm overflow-hidden w-full max-w-7xl mt-4 pt-1 pb-1">
+						<Card className="rounded-2xl border shadow-sm justify-around overflow-hidden max-w-7xl min-w-6xl mt-4 pt-1 pb-1">
 							<FilesTable
 								contents={contents}
 								onDataChange={refreshContents}
@@ -182,7 +186,7 @@ const DashboardPage = () => {
 								totalCount={totalCount}
 							/>
 						</Card>
-					</>
+					</div>
 				}
 			</div>
 		</>

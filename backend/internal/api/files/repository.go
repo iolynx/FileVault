@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db/sqlc"
-	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/util"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -31,14 +30,8 @@ func (r *Repository) GetFileByUUID(ctx context.Context, id uuid.UUID) (sqlc.File
 	return r.queries.GetFileByUUID(ctx, id)
 }
 
-func (r *Repository) CreateBlob(ctx context.Context, sha, storagePath string, mimeType string, size int64) (sqlc.Blob, error) {
-	return r.queries.CreateBlob(ctx, sqlc.CreateBlobParams{
-		Sha256:      sha,
-		StoragePath: storagePath,
-		MimeType:    util.NewText(mimeType),
-		Size:        size,
-		Refcount:    1,
-	})
+func (r *Repository) CreateBlob(ctx context.Context, arg sqlc.CreateBlobParams) (sqlc.Blob, error) {
+	return r.queries.CreateBlob(ctx, arg)
 }
 
 func (r *Repository) IncrementBlobRefcount(ctx context.Context, blobID uuid.UUID) (int32, error) {
@@ -131,22 +124,6 @@ func (r *Repository) ListRootContents(ctx context.Context, arg sqlc.ListRootCont
 	return r.queries.ListRootContents(ctx, arg)
 }
 
-func (r *Repository) IncrementUserStorage(ctx context.Context, userID int64, original_storage_increment, dedup_storage_increment int) error {
-	return r.queries.IncrementUserStorage(ctx, sqlc.IncrementUserStorageParams{
-		ID:                   userID,
-		OriginalStorageBytes: int64(original_storage_increment),
-		DedupStorageBytes:    int64(dedup_storage_increment),
-	})
-}
-
-func (r *Repository) DecrementUserStorage(ctx context.Context, userID int64, original_storage_decrement, dedup_storage_decrement int) error {
-	return r.queries.DecrementUserStorage(ctx, sqlc.DecrementUserStorageParams{
-		ID:                   userID,
-		OriginalStorageBytes: int64(original_storage_decrement),
-		DedupStorageBytes:    int64(dedup_storage_decrement),
-	})
-}
-
 func (r *Repository) IncrementDownloadCount(ctx context.Context, fileID uuid.UUID) error {
 	return r.queries.IncrementFileDownloadCount(ctx, fileID)
 }
@@ -159,6 +136,6 @@ func (r *Repository) ListAllFiles(ctx context.Context, arg sqlc.ListAllFilesPara
 	return r.queries.ListAllFiles(ctx, arg)
 }
 
-func (r *Repository) DeleteBlobIfUnused(ctx context.Context, blobID uuid.UUID) error {
+func (r *Repository) DeleteBlobIfUnused(ctx context.Context, blobID uuid.UUID) (string, error) {
 	return r.queries.DeleteBlobIfUnused(ctx, blobID)
 }

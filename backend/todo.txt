@@ -4,14 +4,11 @@
 (FEAT)
 - check mimetype
 - move files and folders
-- show user card with actual storage quota + update user card on open
 - password strength
 - audit logs
-- move breadcrumb to left, make it better
 - chron job to check storage from time to time
 
 (BUG)
-- make loading usehook better (onclick)
 - pagiation disappears when u set it too high
 - bulk reshare
 

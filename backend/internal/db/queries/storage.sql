@@ -29,8 +29,10 @@ UPDATE blobs SET refcount = refcount - 1
 WHERE id = $1
 RETURNING refcount;
 
--- name: DeleteBlobIfUnused :exec
-DELETE FROM blobs WHERE id = $1 AND refcount <= 0;
+-- name: DeleteBlobIfUnused :one
+DELETE FROM blobs 
+WHERE id = $1 AND refcount <= 0
+RETURNING storage_path;
 
 -- name: DeleteBlobsByStoragePaths :exec
 DELETE FROM blobs
@@ -256,33 +258,22 @@ ORDER BY
     CASE WHEN sqlc.arg(sort_by)::text = 'uploaded_at' AND sqlc.arg(sort_order)::text = 'desc' THEN uploaded_at END DESC
 LIMIT $1 OFFSET $2;
 
--- name: IncrementUserStorage :exec
-UPDATE users
-SET original_storage_bytes = original_storage_bytes + $2,
-    dedup_storage_bytes = dedup_storage_bytes + $3
-WHERE id = $1;
-
--- name: DecrementUserStorage :exec
-UPDATE users
-SET original_storage_bytes = GREATEST(original_storage_bytes - $2, 0),
-    dedup_storage_bytes = GREATEST(dedup_storage_bytes - $3, 0)
-WHERE id = $1;
 
 -- name: IncrementFileDownloadCount :exec
 UPDATE files
 SET download_count = download_count + 1
 WHERE id = $1;
 
--- name: GetObjectKeysInFolderHierarchy :many
+-- name: GetBlobIDsInFolderHierarchy :many
 WITH RECURSIVE folder_hierarchy AS (
+    -- This part is correct and finds all sub-folder IDs
     SELECT fo.id FROM folders fo WHERE fo.id = $1
     UNION ALL
     SELECT f.id FROM folders f
     INNER JOIN folder_hierarchy fh ON f.parent_folder_id = fh.id
 )
-SELECT b.storage_path
+SELECT DISTINCT f.blob_id
 FROM files f
-JOIN blobs b ON f.blob_id = b.id
 WHERE f.folder_id IN (SELECT id FROM folder_hierarchy);
 
 -- name: ListAllFiles :many
