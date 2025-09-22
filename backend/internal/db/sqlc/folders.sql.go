@@ -69,6 +69,68 @@ func (q *Queries) GetFolderByID(ctx context.Context, id uuid.UUID) (Folder, erro
 	return i, err
 }
 
+const listSelectableFolders = `-- name: ListSelectableFolders :many
+WITH RECURSIVE forbidden_folders AS (
+    SELECT id FROM folders WHERE id = $2::uuid
+
+    UNION ALL
+
+    -- find all children of the folders already in our set.
+    SELECT f.id
+    FROM folders f
+    INNER JOIN forbidden_folders ff ON f.parent_folder_id = ff.id
+)
+SELECT
+    f.id,
+    f.name,
+    f.created_at,
+    f.parent_folder_id
+FROM folders f
+WHERE
+    f.owner_id = $1
+    -- exclude all folders that are in the forbidden list
+    AND f.id NOT IN (SELECT id FROM forbidden_folders)
+ORDER BY
+    f.created_at DESC
+`
+
+type ListSelectableFoldersParams struct {
+	OwnerID         int64       `json:"owner_id"`
+	CurrentFolderID pgtype.UUID `json:"current_folder_id"`
+}
+
+type ListSelectableFoldersRow struct {
+	ID             uuid.UUID          `json:"id"`
+	Name           string             `json:"name"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	ParentFolderID pgtype.UUID        `json:"parent_folder_id"`
+}
+
+func (q *Queries) ListSelectableFolders(ctx context.Context, arg ListSelectableFoldersParams) ([]ListSelectableFoldersRow, error) {
+	rows, err := q.db.Query(ctx, listSelectableFolders, arg.OwnerID, arg.CurrentFolderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSelectableFoldersRow{}
+	for rows.Next() {
+		var i ListSelectableFoldersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.ParentFolderID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateFolder = `-- name: UpdateFolder :one
 UPDATE folders
 SET 
@@ -104,4 +166,21 @@ func (q *Queries) UpdateFolder(ctx context.Context, arg UpdateFolderParams) (Upd
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const updateFolderParentFolder = `-- name: UpdateFolderParentFolder :exec
+UPDATE folders
+SET parent_folder_id = $1
+WHERE id = $2
+RETURNING id, name, owner_id, parent_folder_id, created_at
+`
+
+type UpdateFolderParentFolderParams struct {
+	ParentFolderID pgtype.UUID `json:"parent_folder_id"`
+	ID             uuid.UUID   `json:"id"`
+}
+
+func (q *Queries) UpdateFolderParentFolder(ctx context.Context, arg UpdateFolderParentFolderParams) error {
+	_, err := q.db.Exec(ctx, updateFolderParentFolder, arg.ParentFolderID, arg.ID)
+	return err
 }

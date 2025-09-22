@@ -83,6 +83,13 @@ SET filename = $1
 WHERE id = $2
 RETURNING *;
 
+
+-- name: UpdateFileFolder :exec
+UPDATE files
+SET folder_id = $1
+WHERE id = $2;
+
+
 -- name: ListFilesSharedWithUser :many
 SELECT f.*
 FROM files f

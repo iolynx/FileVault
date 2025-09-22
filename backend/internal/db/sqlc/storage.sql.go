@@ -989,6 +989,22 @@ func (q *Queries) UpdateBlobRefcount(ctx context.Context, arg UpdateBlobRefcount
 	return err
 }
 
+const updateFileFolder = `-- name: UpdateFileFolder :exec
+UPDATE files
+SET folder_id = $1
+WHERE id = $2
+`
+
+type UpdateFileFolderParams struct {
+	FolderID pgtype.UUID `json:"folder_id"`
+	ID       uuid.UUID   `json:"id"`
+}
+
+func (q *Queries) UpdateFileFolder(ctx context.Context, arg UpdateFileFolderParams) error {
+	_, err := q.db.Exec(ctx, updateFileFolder, arg.FolderID, arg.ID)
+	return err
+}
+
 const updateFilename = `-- name: UpdateFilename :one
 UPDATE files
 SET filename = $1

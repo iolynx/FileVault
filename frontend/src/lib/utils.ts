@@ -28,3 +28,10 @@ export const mapUsersToOptions = (users: User[]): MultiSelectOption[] => {
     disabled: false,
   }));
 };
+
+export const toSentenceCase = (s: string) => {
+  if (!s) {
+    return "";
+  }
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}

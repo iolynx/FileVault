@@ -36,3 +36,11 @@ func (r *Repository) DeleteFolder(ctx context.Context, folderID uuid.UUID) error
 func (r *Repository) GetBlobIDsInFolderHierarchy(ctx context.Context, folderID uuid.UUID) ([]uuid.UUID, error) {
 	return r.queries.GetBlobIDsInFolderHierarchy(ctx, folderID)
 }
+
+func (r *Repository) UpdateFolderParentFolder(ctx context.Context, arg sqlc.UpdateFolderParentFolderParams) error {
+	return r.queries.UpdateFolderParentFolder(ctx, arg)
+}
+
+func (r *Repository) ListSelectableFolders(ctx context.Context, args sqlc.ListSelectableFoldersParams) ([]sqlc.ListSelectableFoldersRow, error) {
+	return r.queries.ListSelectableFolders(ctx, args)
+}

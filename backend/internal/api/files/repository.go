@@ -139,3 +139,7 @@ func (r *Repository) ListAllFiles(ctx context.Context, arg sqlc.ListAllFilesPara
 func (r *Repository) DeleteBlobIfUnused(ctx context.Context, blobID uuid.UUID) (string, error) {
 	return r.queries.DeleteBlobIfUnused(ctx, blobID)
 }
+
+func (r *Repository) UpdateFileFolder(ctx context.Context, arg sqlc.UpdateFileFolderParams) error {
+	return r.queries.UpdateFileFolder(ctx, arg)
+}

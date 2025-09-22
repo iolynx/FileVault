@@ -3,9 +3,8 @@
 
 (FEAT)
 - check mimetype
-- move files and folders
-- password strength
 - audit logs
+- password strength
 - chron job to check storage from time to time
 
 (BUG)

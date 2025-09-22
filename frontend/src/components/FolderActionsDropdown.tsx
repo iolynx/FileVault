@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { useContentStore } from "@/stores/useContentStore";
 import { InfoModal } from "./InfoModal";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { MoveDialogModal } from "./MoveDialogModal";
 
 interface ActionsDropDownProps {
 	folder: ContentItem;
@@ -28,8 +29,10 @@ export default function FolderActionsDropdown({ folder, onFolderChange }: Action
 	const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false)
 	const [isRenameDialogOpen, setRenameDialogOpen] = useState(false)
 	const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+	const [isMoveDialogOpen, setMoveDialogOpen] = useState(false);
 	const { deleteItem, renameItem } = useContentStore();
 	const { fetchUser } = useAuthStore();
+	const { path } = useContentStore();
 
 	const handleDelete = async () => {
 		try {
@@ -87,7 +90,7 @@ export default function FolderActionsDropdown({ folder, onFolderChange }: Action
 						<DropdownMenuSeparator />
 
 						<DropdownMenuGroup>
-							<DropdownMenuItem>
+							<DropdownMenuItem onSelect={() => setMoveDialogOpen(true)}>
 								<FolderIcon />
 								Move
 							</DropdownMenuItem>
@@ -124,6 +127,16 @@ export default function FolderActionsDropdown({ folder, onFolderChange }: Action
 					onOpenChange={setIsInfoModalOpen}
 					item={folder}
 				/>
+
+				<MoveDialogModal
+					currentFolderId={path[path.length - 1].id}
+					fileId={folder.id}
+					isOpen={isMoveDialogOpen}
+					isOpenChange={setMoveDialogOpen}
+					onConfirm={onFolderChange}
+					context={"folder"}
+				/>
+
 
 			</StopPropagationWrapper>
 		</div>

@@ -22,13 +22,14 @@ import { ContentItem } from "@/types/Content";
 import { InfoModal } from "@/components/InfoModal";
 import { useContentStore } from "@/stores/useContentStore";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { MoveDialogModal } from "./MoveDialogModal";
 
 interface ActionsDropDownProps {
 	file: ContentItem;
 	onFileChange: () => void;
 }
 
-export default function FileActionsDropdown({ file }: ActionsDropDownProps) {
+export default function FileActionsDropdown({ file, onFileChange }: ActionsDropDownProps) {
 	const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false)
 	const [isRenameDialogOpen, setRenameDialogOpen] = useState(false)
 	const [isShareDialogOpen, setShareDialogOpen] = useState(false)
@@ -37,7 +38,9 @@ export default function FileActionsDropdown({ file }: ActionsDropDownProps) {
 	const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
 	const { renameItem, deleteItem } = useContentStore();
 	const [shareDialogOptions, setShareDialogOptions] = useState<MultiSelectOption[]>([]);
+	const [isMoveDialogOpen, setMoveDialogOpen] = useState(false);
 	const { fetchUser } = useAuthStore();
+	const { path, fetchContents } = useContentStore();
 
 	const fetchShareInfo = async () => {
 		try {
@@ -150,10 +153,6 @@ export default function FileActionsDropdown({ file }: ActionsDropDownProps) {
 		} catch (error: any) {
 			console.error(error);
 			toast.error(error.response?.data?.error || "Failed to share file");
-		} finally {
-			// do nothing 
-			// would've onFileChange() but
-			// it exceeds rate limits :(
 		}
 	};
 	return (
@@ -186,7 +185,7 @@ export default function FileActionsDropdown({ file }: ActionsDropDownProps) {
 							<UserRoundPlusIcon />
 							Share
 						</DropdownMenuItem>
-						<DropdownMenuItem>
+						<DropdownMenuItem onSelect={() => setMoveDialogOpen(true)} disabled={file.user_owns_file ? false : true}>
 							<FolderIcon />
 							Move
 						</DropdownMenuItem>
@@ -231,6 +230,15 @@ export default function FileActionsDropdown({ file }: ActionsDropDownProps) {
 				isOpen={isInfoModalOpen}
 				onOpenChange={setIsInfoModalOpen}
 				item={file}
+			/>
+
+			<MoveDialogModal
+				currentFolderId={path[path.length - 1].id}
+				fileId={file.id}
+				isOpen={isMoveDialogOpen}
+				isOpenChange={setMoveDialogOpen}
+				onConfirm={onFileChange}
+				context={"file"}
 			/>
 
 		</div>

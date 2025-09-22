@@ -24,7 +24,7 @@ export function UserAccountPopover() {
 
 	if (!user) {
 		return (
-			<Link href="/login" passHref legacyBehavior>
+			<Link href="/login" passHref>
 				<Button asChild>
 					<a>Login</a>
 				</Button>

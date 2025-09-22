@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/apierror"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/folders"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/users"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db/sqlc"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/storage"
@@ -25,9 +26,10 @@ import (
 )
 
 type Service struct {
-	usersRepo *users.Repository
-	repo      *Repository
-	storage   storage.Storage
+	userRepo   *users.Repository
+	folderRepo *folders.Repository
+	repo       *Repository
+	storage    storage.Storage
 }
 
 type File struct {
@@ -58,11 +60,12 @@ type User struct {
 	Permission string `json:"permission"`
 }
 
-func NewService(filesRepo *Repository, usersRepo *users.Repository, storage storage.Storage) *Service {
+func NewService(filesRepo *Repository, userRepo *users.Repository, folderRepo *folders.Repository, storage storage.Storage) *Service {
 	return &Service{
-		repo:      filesRepo,
-		usersRepo: usersRepo,
-		storage:   storage,
+		repo:       filesRepo,
+		userRepo:   userRepo,
+		folderRepo: folderRepo,
+		storage:    storage,
 	}
 }
 
@@ -103,7 +106,7 @@ func (s *Service) UploadFile(ctx context.Context, file multipart.File, header *m
 		log.Print("blob already exists, updating refcount")
 		blob = existingBlob
 	} else {
-		user, err := s.usersRepo.GetUserByID(ctx, ownerID)
+		user, err := s.userRepo.GetUserByID(ctx, ownerID)
 		if err != nil {
 			return sqlc.File{}, apierror.NewInternalServerError("Could not retrieve user data")
 		}
@@ -641,7 +644,7 @@ func (s *Service) GetShareInfo(ctx context.Context, fileID uuid.UUID) (ShareInfo
 	}
 
 	// Get the list of all other users to share with
-	allUsersRows, err := s.usersRepo.ListOtherUsers(ctx, userID)
+	allUsersRows, err := s.userRepo.ListOtherUsers(ctx, userID)
 	if err != nil {
 		return ShareInfoResponse{}, err
 	}
@@ -671,4 +674,41 @@ func (s *Service) GetShareInfo(ctx context.Context, fileID uuid.UUID) (ShareInfo
 		SharedWith: sharedWith,
 		AllUsers:   allUsers,
 	}, nil
+}
+
+func (s *Service) MoveFile(ctx context.Context, fileID uuid.UUID, req MoveFileRequest) error {
+	userID, ok := userctx.GetUserID(ctx)
+	if !ok {
+		return apierror.NewUnauthorizedError()
+	}
+
+	// Get file, ownership check
+	file, err := s.repo.GetFileByUUID(ctx, fileID)
+	if err != nil {
+		return err
+	}
+	if file.OwnerID != userID {
+		return apierror.NewForbiddenError()
+	}
+
+	if req.TargetFolderID != nil {
+		// verify folder exists and is owned by user
+		folder, err := s.folderRepo.GetFolderByID(ctx, *req.TargetFolderID)
+		if err != nil {
+			return err
+		}
+		if folder.OwnerID != userID {
+			return apierror.NewForbiddenError()
+		}
+	}
+
+	params := sqlc.UpdateFileFolderParams{
+		ID: fileID,
+	}
+	if req.TargetFolderID != nil {
+		params.FolderID = pgtype.UUID{Bytes: *req.TargetFolderID, Valid: true}
+	}
+
+	// update DB
+	return s.repo.UpdateFileFolder(ctx, params)
 }

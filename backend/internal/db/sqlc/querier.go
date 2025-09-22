@@ -43,10 +43,13 @@ type Querier interface {
 	ListFolderContents(ctx context.Context, arg ListFolderContentsParams) ([]ListFolderContentsRow, error)
 	ListOtherUsers(ctx context.Context, id int64) ([]ListOtherUsersRow, error)
 	ListRootContents(ctx context.Context, arg ListRootContentsParams) ([]ListRootContentsRow, error)
+	ListSelectableFolders(ctx context.Context, arg ListSelectableFoldersParams) ([]ListSelectableFoldersRow, error)
 	ListUsersWithAccessToFile(ctx context.Context, fileID uuid.UUID) ([]ListUsersWithAccessToFileRow, error)
 	UpdateBlobRefcount(ctx context.Context, arg UpdateBlobRefcountParams) error
+	UpdateFileFolder(ctx context.Context, arg UpdateFileFolderParams) error
 	UpdateFilename(ctx context.Context, arg UpdateFilenameParams) (File, error)
 	UpdateFolder(ctx context.Context, arg UpdateFolderParams) (UpdateFolderRow, error)
+	UpdateFolderParentFolder(ctx context.Context, arg UpdateFolderParentFolderParams) error
 	UserExists(ctx context.Context, id int64) (bool, error)
 	UserHasAccess(ctx context.Context, arg UserHasAccessParams) (bool, error)
 	UserOwnsBlob(ctx context.Context, arg UserOwnsBlobParams) (int32, error)

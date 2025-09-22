@@ -52,15 +52,15 @@ func main() {
 	userService := users.NewService(userRepo, os.Getenv("JWT_SECRET"), cfg)
 	userHandler := users.NewHandler(userService)
 
-	// Initialize Files Repository, Service, Handler
-	fileRepo := files.NewRepository(dbRepo)
-	fileService := files.NewService(fileRepo, userRepo, store)
-	fileHandler := files.NewFileHandler(fileService)
-
 	// Initialize Folders Repository, Service, Handler
 	folderRepo := folders.NewRepository(dbRepo)
 	folderService := folders.NewService(folderRepo, store)
 	folderHandler := folders.NewHandler(folderService)
+
+	// Initialize Files Repository, Service, Handler
+	fileRepo := files.NewRepository(dbRepo)
+	fileService := files.NewService(fileRepo, userRepo, folderRepo, store)
+	fileHandler := files.NewFileHandler(fileService)
 
 	server := api.NewServer(cfg, userHandler, fileHandler, folderHandler, redisClient, dbRepo)
 

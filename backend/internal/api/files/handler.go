@@ -34,11 +34,11 @@ func (h *FileHandler) RegisterRoutes(r chi.Router) {
 	r.Get("/files/{id}", apphandler.MakeHTTPHandler(h.DownloadFile))
 	r.Patch("/files/{id}", apphandler.MakeHTTPHandler(h.UpdateFilename))
 	r.Delete("/files/{id}", apphandler.MakeHTTPHandler(h.DeleteFile))
-	//r.Post("/files/{id}/move", fileHandler.MoveFile)
+	r.Patch("/files/{id}/move", apphandler.MakeHTTPHandler(h.MoveFile))
 
-	r.Post("/files/{id}/share", apphandler.MakeHTTPHandler(h.ShareFile))
 	r.Get("/files/{id}/share-info", apphandler.MakeHTTPHandler(h.GetShareInfo))
 	r.Delete("/files/{id}/share/{userid}", apphandler.MakeHTTPHandler(h.UnshareFile))
+	r.Post("/files/{id}/share", apphandler.MakeHTTPHandler(h.ShareFile))
 }
 
 func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) error {
@@ -363,4 +363,25 @@ func (h *FileHandler) GetShareInfo(w http.ResponseWriter, r *http.Request) error
 	}
 
 	return util.WriteJSON(w, http.StatusOK, shareInfo)
+}
+
+type MoveFileRequest struct {
+	TargetFolderID *uuid.UUID `json:"target_folder_id"`
+}
+
+func (h *FileHandler) MoveFile(w http.ResponseWriter, r *http.Request) error {
+	fileIDStr := chi.URLParam(r, "id")
+	fileID, err := uuid.Parse(fileIDStr)
+	if err != nil {
+		return apierror.NewBadRequestError("Invalid fileID")
+	}
+
+	var req MoveFileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return apierror.NewBadRequestError("Invalid request body")
+	}
+
+	log.Println(req)
+
+	return h.service.MoveFile(r.Context(), fileID, req)
 }

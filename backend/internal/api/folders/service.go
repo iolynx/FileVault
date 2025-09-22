@@ -9,6 +9,7 @@ import (
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db/sqlc"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/storage"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/userctx"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/util"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -111,6 +112,53 @@ func (s *Service) UpdateFolder(ctx context.Context, folderID uuid.UUID, req Upda
 	}, nil
 }
 
+type Folder struct {
+	ID             uuid.UUID  `json:"id"`
+	Name           string     `json:"name"`
+	CreatedAt      time.Time  `json:"created_at"`
+	ParentFolderID *uuid.UUID `json:"parent_folder_id,omitempty"`
+}
+
+func (s *Service) GetSelectableFolders(ctx context.Context, folderID *uuid.UUID) ([]Folder, error) {
+	userID, ok := userctx.GetUserID(ctx)
+	if !ok {
+		return nil, apierror.NewUnauthorizedError()
+	}
+
+	if folderID != nil {
+		folder, err := s.repo.GetFolderByID(ctx, *folderID)
+		if err != nil {
+			return nil, apierror.NewNotFoundError("Folder")
+		}
+		if folder.OwnerID != userID {
+			return nil, apierror.NewForbiddenError()
+		}
+	}
+
+	params := sqlc.ListSelectableFoldersParams{
+		OwnerID: userID,
+	}
+	if folderID != nil {
+		params.CurrentFolderID = pgtype.UUID{Bytes: *folderID, Valid: true}
+	}
+
+	rows, err := s.repo.ListSelectableFolders(ctx, params)
+	if err != nil {
+		return nil, apierror.NewInternalServerError()
+	}
+
+	folders := make([]Folder, len(rows))
+	for i, row := range rows {
+		folders[i] = Folder{
+			ID:             row.ID,
+			Name:           row.Name,
+			CreatedAt:      row.CreatedAt.Time,
+			ParentFolderID: util.ToUUIDPtr(row.ParentFolderID),
+		}
+	}
+	return folders, nil
+}
+
 func (s *Service) DeleteFolder(ctx context.Context, folderID uuid.UUID) error {
 	ownerID, ok := userctx.GetUserID(ctx)
 	if !ok {
@@ -160,4 +208,45 @@ func (s *Service) DeleteFolder(ctx context.Context, folderID uuid.UUID) error {
 		}
 	}
 	return nil
+}
+
+type UpdateFolderParentRequest struct {
+	TargetFolderID *uuid.UUID `json:"target_folder_id"`
+}
+
+func (s *Service) UpdateFolderParent(ctx context.Context, folderID uuid.UUID, req UpdateFolderParentRequest) error {
+	userID, ok := userctx.GetUserID(ctx)
+	if !ok {
+		return apierror.NewUnauthorizedError()
+	}
+
+	// ownership checks
+	folder, err := s.repo.GetFolderByID(ctx, folderID)
+	if err != nil {
+		return apierror.NewInternalServerError()
+	}
+	if folder.OwnerID != userID {
+		return apierror.NewForbiddenError()
+	}
+
+	// if the destination (parent) folder is not null, check its ownership
+	if req.TargetFolderID != nil {
+		newParentFolder, err := s.repo.GetFolderByID(ctx, *req.TargetFolderID)
+		if err != nil {
+			return apierror.NewInternalServerError("Could not find parent folder")
+		}
+		if newParentFolder.OwnerID != userID {
+			return apierror.NewForbiddenError()
+		}
+	}
+
+	params := sqlc.UpdateFolderParentFolderParams{
+		ID: folderID,
+	}
+
+	if req.TargetFolderID != nil {
+		params.ParentFolderID = pgtype.UUID{Bytes: *req.TargetFolderID, Valid: true}
+	}
+
+	return s.repo.UpdateFolderParentFolder(ctx, params)
 }

@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -57,4 +58,12 @@ func ToPgTimestamptz(t *time.Time) pgtype.Timestamptz {
 		Time:  *t,
 		Valid: true,
 	}
+}
+
+func ToUUIDPtr(pgUUID pgtype.UUID) *uuid.UUID {
+	if !pgUUID.Valid {
+		return nil
+	}
+	u := uuid.UUID(pgUUID.Bytes)
+	return &u
 }

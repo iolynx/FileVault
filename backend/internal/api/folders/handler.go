@@ -24,6 +24,9 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/folders", apphandler.MakeHTTPHandler(h.CreateFolder))
 	r.Patch("/folders/{folderId}", apphandler.MakeHTTPHandler(h.UpdateFolder))
 	r.Delete("/folders/{folderId}", apphandler.MakeHTTPHandler(h.DeleteFolder))
+	r.Patch("/folders/{id}/move", apphandler.MakeHTTPHandler(h.MoveFolder))
+	r.Get("/folders/{id}", apphandler.MakeHTTPHandler(h.GetSelectableFolders))
+	r.Get("/folders/", apphandler.MakeHTTPHandler(h.GetSelectableFolders))
 }
 
 func (h *Handler) CreateFolder(w http.ResponseWriter, r *http.Request) error {
@@ -76,4 +79,38 @@ func (h *Handler) DeleteFolder(w http.ResponseWriter, r *http.Request) error {
 
 	w.WriteHeader(http.StatusNoContent)
 	return nil
+}
+
+func (h *Handler) MoveFolder(w http.ResponseWriter, r *http.Request) error {
+	folderIDStr := chi.URLParam(r, "id")
+	folderID, err := uuid.Parse(folderIDStr)
+	if err != nil {
+		return apierror.NewBadRequestError("Invalid fileID")
+	}
+
+	var req UpdateFolderParentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return apierror.NewBadRequestError("Invalid request body")
+	}
+
+	return h.service.UpdateFolderParent(r.Context(), folderID, req)
+}
+
+func (h *Handler) GetSelectableFolders(w http.ResponseWriter, r *http.Request) error {
+	folderIDStr := chi.URLParam(r, "id")
+	var folderID *uuid.UUID
+	if folderIDStr != "" {
+		parsed, err := uuid.Parse(folderIDStr)
+		if err != nil {
+			return apierror.NewBadRequestError("Invalid FolderID")
+		}
+		folderID = &parsed
+	}
+
+	folders, err := h.service.GetSelectableFolders(r.Context(), folderID)
+	if err != nil {
+		return err
+	}
+
+	return util.WriteJSON(w, http.StatusOK, folders)
 }
