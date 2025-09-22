@@ -294,13 +294,19 @@ func (h *FileHandler) ListAllFiles(w http.ResponseWriter, r *http.Request) error
 	}
 
 	totalCount := int64(0)
+	logicalBytes := int64(0)
+	physicalBytes := int64(0)
 	if len(files) > 0 {
 		totalCount = fileRows[0].TotalCount
+		logicalBytes = fileRows[0].TotalLogicalSize
+		physicalBytes = fileRows[0].TotalPhysicalSize
 	}
 
 	response := PaginatedFilesResponse{
-		Data:       files,
-		TotalCount: totalCount,
+		Data:               files,
+		TotalCount:         totalCount,
+		TotalLogicalBytes:  logicalBytes,
+		TotalPhysicalBytes: physicalBytes,
 	}
 
 	return util.WriteJSON(w, http.StatusOK, response)

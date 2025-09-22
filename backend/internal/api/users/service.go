@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/apierror"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/audit"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/config"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db/sqlc"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/userctx"
@@ -19,17 +20,19 @@ type Service struct {
 	repo                *Repository
 	jwtSecret           []byte
 	defaultStorageQuota int64
+	audit               audit.Service
 }
 
 // NewService creates a new instance of the users Service.
 // - repo: the user repository for database operations.
 // - jwtSecret: secret key used for signing JWT tokens.
 // - cfg: configuration struct containing server settings like default storage quota.
-func NewService(repo *Repository, jwtSecret string, cfg *config.Config) *Service {
+func NewService(repo *Repository, jwtSecret string, cfg *config.Config, auditService audit.Service) *Service {
 	return &Service{
 		repo:                repo,
 		jwtSecret:           []byte(jwtSecret),
 		defaultStorageQuota: cfg.Server.DefaultStorageQuota,
+		audit:               auditService,
 	}
 }
 
@@ -52,6 +55,15 @@ func (s *Service) Signup(ctx context.Context, email, name string, password strin
 	if err != nil {
 		return sqlc.User{}, fmt.Errorf("Failed to create user: %w", err)
 	}
+
+	// Record audit entry for Signup
+	s.audit.Log(ctx, audit.LogParams{
+		UserID: user.ID,
+		Action: "USER_REGISTERED",
+		Details: map[string]interface{}{
+			"email": user.Email,
+		},
+	})
 	return user, nil
 }
 
@@ -71,6 +83,12 @@ func (s *Service) AuthenticateUser(ctx context.Context, email, password string) 
 	}
 
 	log.Println("User Authenticated")
+
+	// Audit the User Login
+	s.audit.Log(ctx, audit.LogParams{
+		UserID: user.ID,
+		Action: "USER_LOGGED_IN",
+	})
 	return user.ID, nil
 }
 

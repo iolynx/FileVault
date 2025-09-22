@@ -129,8 +129,10 @@ type ListAllFilesResponse struct {
 // PaginatedFilesResponse represents a paginated response aggregating
 // content data (files & folders), bundled with total count for pagination.
 type PaginatedFilesResponse struct {
-	Data       []ListAllFilesResponse `json:"data"`
-	TotalCount int64                  `json:"totalCount"`
+	Data               []ListAllFilesResponse `json:"data"`
+	TotalCount         int64                  `json:"totalCount"`
+	TotalLogicalBytes  int64                  `json:"total_logical_bytes"`
+	TotalPhysicalBytes int64                  `json:"total_physical_bytes"`
 }
 
 // MoveFileRequest represents the default request to

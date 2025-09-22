@@ -8,9 +8,11 @@ import (
 	"os"
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/admin"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/files"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/folders"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/users"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/audit"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/config"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db/sqlc"
@@ -49,9 +51,11 @@ func main() {
 	}
 	log.Println("Connected to Redis")
 
+	auditService := audit.NewService(dbRepo)
+
 	// Initialize Users Repository, Service, Handler
 	userRepo := users.NewRepository(dbRepo)
-	userService := users.NewService(userRepo, os.Getenv("JWT_SECRET"), cfg)
+	userService := users.NewService(userRepo, os.Getenv("JWT_SECRET"), cfg, auditService)
 	userHandler := users.NewHandler(userService)
 
 	// Initialize Folders Repository, Service, Handler
@@ -61,10 +65,14 @@ func main() {
 
 	// Initialize Files Repository, Service, Handler
 	fileRepo := files.NewRepository(pool) // Initializing with pool to enable transactions
-	fileService := files.NewService(fileRepo, userRepo, folderRepo, store)
+	fileService := files.NewService(fileRepo, userRepo, folderRepo, store, auditService)
 	fileHandler := files.NewFileHandler(fileService)
 
-	server := api.NewServer(cfg, userHandler, fileHandler, folderHandler, redisClient, dbRepo)
+	// Initialize Admin Service, Handler
+	adminService := admin.NewService(dbRepo)
+	adminHandler := admin.NewHandler(adminService)
+
+	server := api.NewServer(cfg, userHandler, fileHandler, folderHandler, adminHandler, redisClient, dbRepo)
 
 	log.Printf("Server listening on :%s", cfg.Server.Port)
 	addr := fmt.Sprintf(":%s", cfg.Server.Port)

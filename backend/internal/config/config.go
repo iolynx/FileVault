@@ -3,12 +3,12 @@ package config
 import (
 	"errors"
 	"fmt"
-	"log"
+	_ "log"
 	"os"
 	"strconv"
 
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/util"
-	"github.com/joho/godotenv"
+	_ "github.com/joho/godotenv"
 )
 
 // Config holds all the application configuration settings.
@@ -51,10 +51,11 @@ type RedisConfig struct {
 
 // LoadConfig reads configuration from environment variables.
 func LoadConfig() (*Config, error) {
-	err := godotenv.Load("../.env")
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
+	// err := godotenv.Load("../.env")
+	// if err != nil {
+	// 	//log.Fatal("Error loading .env file")
+	// 	log.Printf("couldnt find env vars..")
+	// }
 
 	requiredVars := []string{
 		"PORT", "MINIO_ENDPOINT", "MINIO_ACCESS", "MINIO_SECRET",

@@ -12,6 +12,7 @@ import (
 
 type Querier interface {
 	AddSharesToFile(ctx context.Context, arg []AddSharesToFileParams) (int64, error)
+	CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) (AuditLog, error)
 	CreateBlob(ctx context.Context, arg CreateBlobParams) (Blob, error)
 	CreateFile(ctx context.Context, arg CreateFileParams) (File, error)
 	CreateFolder(ctx context.Context, arg CreateFolderParams) (Folder, error)
@@ -22,6 +23,7 @@ type Querier interface {
 	DeleteBlobsByStoragePaths(ctx context.Context, storagePaths []string) error
 	DeleteFile(ctx context.Context, id uuid.UUID) error
 	DeleteFolder(ctx context.Context, id uuid.UUID) error
+	GetAuditLogActivityByDay(ctx context.Context, arg GetAuditLogActivityByDayParams) ([]GetAuditLogActivityByDayRow, error)
 	GetBlobByID(ctx context.Context, id uuid.UUID) (Blob, error)
 	GetBlobBySha(ctx context.Context, sha256 string) (Blob, error)
 	GetBlobIDsInFolderHierarchy(ctx context.Context, id uuid.UUID) ([]uuid.UUID, error)
@@ -34,8 +36,8 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	IncrementFileDownloadCount(ctx context.Context, id uuid.UUID) error
 	ListAllFiles(ctx context.Context, arg ListAllFilesParams) ([]ListAllFilesRow, error)
+	ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([]AuditLog, error)
 	ListFilesByOwner(ctx context.Context, arg ListFilesByOwnerParams) ([]ListFilesByOwnerRow, error)
-	ListFilesSharedWithUser(ctx context.Context, arg ListFilesSharedWithUserParams) ([]File, error)
 	//---------------------------
 	ListFolderContents(ctx context.Context, arg ListFolderContentsParams) ([]ListFolderContentsRow, error)
 	ListOtherUsers(ctx context.Context, id int64) ([]ListOtherUsersRow, error)

@@ -14,6 +14,7 @@ import (
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/apierror"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/folders"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/api/users"
+	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/audit"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/db/sqlc"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/storage"
 	"github.com/BalkanID-University/vit-2026-capstone-internship-hiring-task-iolynx/internal/userctx"
@@ -30,15 +31,17 @@ type Service struct {
 	folderRepo *folders.Repository
 	repo       *Repository
 	storage    storage.Storage
+	audit      audit.Service
 }
 
 // NewService constructs a new Service instance with the provided repositories and storage.
-func NewService(filesRepo *Repository, userRepo *users.Repository, folderRepo *folders.Repository, storage storage.Storage) *Service {
+func NewService(filesRepo *Repository, userRepo *users.Repository, folderRepo *folders.Repository, storage storage.Storage, auditService audit.Service) *Service {
 	return &Service{
 		repo:       filesRepo,
 		userRepo:   userRepo,
 		folderRepo: folderRepo,
 		storage:    storage,
+		audit:      auditService,
 	}
 }
 
@@ -131,7 +134,27 @@ func (s *Service) UploadFile(ctx context.Context, file multipart.File, header *m
 
 	// Create the file record, which triggers blob refcount update
 	log.Println("Creating file record with params:", fileParams)
-	return s.repo.CreateFile(ctx, fileParams)
+	fileRecord, err := s.repo.CreateFile(ctx, fileParams)
+	if err != nil {
+		return sqlc.File{}, err
+	}
+
+	details := map[string]interface{}{
+		"filename":  fileRecord.Filename,
+		"size":      fileRecord.Size,
+		"mime_type": fileRecord.DeclaredMime.String,
+	}
+
+	// Record the audit entry for file upload
+	s.audit.Log(ctx, audit.LogParams{
+		UserID:   ownerID,
+		Action:   "FILE_UPLOADED",
+		TargetID: fileRecord.ID,
+		Details:  details,
+	})
+
+	return fileRecord, nil
+
 }
 
 // GetFileURL returns a signed URL for accessing the file identified by fileID.
@@ -193,6 +216,14 @@ func (s *Service) DownloadFile(ctx context.Context, fileID uuid.UUID) (io.ReadCl
 		return nil, "", err
 	}
 
+	// Record the audit entry for download
+	s.audit.Log(ctx, audit.LogParams{
+		UserID:   ownerID,
+		Action:   "FILE_DOWNLOADED",
+		TargetID: file.ID,
+		Details:  map[string]interface{}{"filename": file.Filename},
+	})
+
 	return blobReader, file.Filename, nil
 }
 
@@ -240,6 +271,14 @@ func (s *Service) DeleteFile(ctx context.Context, fileID uuid.UUID) error {
 	}
 
 	log.Printf("Successfully deleted file %s", fileID)
+
+	// Record the audit entry for file deletion
+	s.audit.Log(ctx, audit.LogParams{
+		UserID:   userID,
+		Action:   "FILE_DELETED",
+		TargetID: file.ID,
+		Details:  map[string]interface{}{"filename": file.Filename, "size": file.Size},
+	})
 	return nil
 }
 
@@ -272,6 +311,9 @@ func (s *Service) UpdateFilename(ctx context.Context, newFilename string, fileID
 		return FileResponse{}, err
 	}
 
+	// getting the old name (to audit log)
+	oldName := file.Filename
+
 	// Ownership check
 	if file.OwnerID != userID {
 		return FileResponse{}, apierror.NewForbiddenError()
@@ -284,6 +326,15 @@ func (s *Service) UpdateFilename(ctx context.Context, newFilename string, fileID
 	if err != nil {
 		return FileResponse{}, err
 	}
+
+	// Record the audit entry for file rename
+	s.audit.Log(ctx, audit.LogParams{
+		UserID:   userID,
+		Action:   "FILE_RENAMED",
+		TargetID: fileID,
+		Details:  map[string]interface{}{"old_name": oldName, "new_name": file.Filename},
+	})
+
 	return FileResponse{
 		ID:            file.ID,
 		Filename:      file.Filename,

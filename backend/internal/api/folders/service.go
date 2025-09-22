@@ -235,6 +235,9 @@ func (s *Service) UpdateFolderParent(ctx context.Context, folderID uuid.UUID, re
 		if newParentFolder.OwnerID != userID {
 			return apierror.NewForbiddenError()
 		}
+		if newParentFolder.ID == folderID {
+			return apierror.NewBadRequestError("Source and Destination cannot be the same")
+		}
 	}
 
 	params := sqlc.UpdateFolderParentFolderParams{

@@ -32,9 +32,9 @@ export function UserAccountPopover() {
 		);
 	}
 
-	const router = useRouter()
 	const usedStoragePercentage = (user.deduplicated_usage_bytes / user.storage_quota_bytes) * 100;
 	const remainingBytes = Math.max(user.storage_quota_bytes - user.deduplicated_usage_bytes, 0);
+	const router = useRouter()
 
 	const logout = async () => {
 		try {

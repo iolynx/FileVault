@@ -75,17 +75,6 @@ func (r *Repository) DeleteFile(ctx context.Context, fileID uuid.UUID) error {
 	return r.queries.DeleteFile(ctx, fileID)
 }
 
-// ListFilesSharedWithUser returns a paginated list of files shared with a specific user.
-// Supports optional search by filename. Returns an error if the query fails.
-func (r *Repository) ListFilesSharedWithUser(ctx context.Context, userID int64, search string, limit, offset int32) ([]sqlc.File, error) {
-	return r.queries.ListFilesSharedWithUser(ctx, sqlc.ListFilesSharedWithUserParams{
-		SharedWith: userID,
-		Column2:    search,
-		Limit:      limit,
-		Offset:     offset,
-	})
-}
-
 // UpdateFilename updates the filename of a file record.
 // Returns the updated file or an error if the operation fails.
 func (r *Repository) UpdateFilename(ctx context.Context, arg sqlc.UpdateFilenameParams) (sqlc.File, error) {

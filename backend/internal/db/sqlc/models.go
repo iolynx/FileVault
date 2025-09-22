@@ -6,10 +6,67 @@ package sqlc
 
 import (
 	"database/sql"
+	"database/sql/driver"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type AuditAction string
+
+const (
+	AuditActionUSERREGISTERED AuditAction = "USER_REGISTERED"
+	AuditActionUSERLOGGEDIN   AuditAction = "USER_LOGGED_IN"
+	AuditActionFILEUPLOADED   AuditAction = "FILE_UPLOADED"
+	AuditActionFILEDOWNLOADED AuditAction = "FILE_DOWNLOADED"
+	AuditActionFILERENAMED    AuditAction = "FILE_RENAMED"
+	AuditActionFILEDELETED    AuditAction = "FILE_DELETED"
+)
+
+func (e *AuditAction) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = AuditAction(s)
+	case string:
+		*e = AuditAction(s)
+	default:
+		return fmt.Errorf("unsupported scan type for AuditAction: %T", src)
+	}
+	return nil
+}
+
+type NullAuditAction struct {
+	AuditAction AuditAction `json:"audit_action"`
+	Valid       bool        `json:"valid"` // Valid is true if AuditAction is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullAuditAction) Scan(value interface{}) error {
+	if value == nil {
+		ns.AuditAction, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.AuditAction.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullAuditAction) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.AuditAction), nil
+}
+
+type AuditLog struct {
+	ID        int64              `json:"id"`
+	UserID    sql.NullInt64      `json:"user_id"`
+	Action    AuditAction        `json:"action"`
+	TargetID  pgtype.UUID        `json:"target_id"`
+	Details   []byte             `json:"details"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
 
 type Blob struct {
 	ID          uuid.UUID          `json:"id"`

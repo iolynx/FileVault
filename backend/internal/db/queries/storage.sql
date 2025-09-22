@@ -244,7 +244,9 @@ SELECT
     f.download_count,
     f.owner_id,
     u.email as owner_email,
-    COUNT(*) OVER() AS total_count
+    COUNT(*) OVER() AS total_count,
+    (SELECT SUM(size) FROM files) AS total_logical_size,
+    (SELECT SUM(size) FROM blobs) AS total_physical_size
 FROM
     files f
 JOIN

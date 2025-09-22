@@ -33,13 +33,23 @@ const AuthorizedLayout = async ({ children }: { children: ReactNode }) => {
 
               {/*Admin only Page */}
               {user?.role === 'admin' && (
-                <NavigationMenuItem>
-                  <Link href="/admin" passHref>
-                    <NavigationMenuLink className={navigationMenuTriggerStyle()}>
-                      Admin Panel
-                    </NavigationMenuLink>
-                  </Link>
-                </NavigationMenuItem>
+                <>
+                  <NavigationMenuItem>
+                    <Link href="/admin" passHref>
+                      <NavigationMenuLink className={navigationMenuTriggerStyle()}>
+                        Admin Panel
+                      </NavigationMenuLink>
+                    </Link>
+                  </NavigationMenuItem>
+
+                  <NavigationMenuItem>
+                    <Link href="/admin/audit-logs" passHref>
+                      <NavigationMenuLink className={navigationMenuTriggerStyle()}>
+                        Audit Logs
+                      </NavigationMenuLink>
+                    </Link>
+                  </NavigationMenuItem>
+                </>
               )}
 
             </NavigationMenuList>

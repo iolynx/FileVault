@@ -343,7 +343,9 @@ SELECT
     f.download_count,
     f.owner_id,
     u.email as owner_email,
-    COUNT(*) OVER() AS total_count
+    COUNT(*) OVER() AS total_count,
+    (SELECT SUM(size) FROM files) AS total_logical_size,
+    (SELECT SUM(size) FROM blobs) AS total_physical_size
 FROM
     files f
 JOIN
@@ -382,15 +384,17 @@ type ListAllFilesParams struct {
 }
 
 type ListAllFilesRow struct {
-	ID            uuid.UUID          `json:"id"`
-	Filename      string             `json:"filename"`
-	Size          int64              `json:"size"`
-	DeclaredMime  pgtype.Text        `json:"declared_mime"`
-	UploadedAt    pgtype.Timestamptz `json:"uploaded_at"`
-	DownloadCount sql.NullInt64      `json:"download_count"`
-	OwnerID       int64              `json:"owner_id"`
-	OwnerEmail    string             `json:"owner_email"`
-	TotalCount    int64              `json:"total_count"`
+	ID                uuid.UUID          `json:"id"`
+	Filename          string             `json:"filename"`
+	Size              int64              `json:"size"`
+	DeclaredMime      pgtype.Text        `json:"declared_mime"`
+	UploadedAt        pgtype.Timestamptz `json:"uploaded_at"`
+	DownloadCount     sql.NullInt64      `json:"download_count"`
+	OwnerID           int64              `json:"owner_id"`
+	OwnerEmail        string             `json:"owner_email"`
+	TotalCount        int64              `json:"total_count"`
+	TotalLogicalSize  int64              `json:"total_logical_size"`
+	TotalPhysicalSize int64              `json:"total_physical_size"`
 }
 
 func (q *Queries) ListAllFiles(ctx context.Context, arg ListAllFilesParams) ([]ListAllFilesRow, error) {
@@ -417,6 +421,8 @@ func (q *Queries) ListAllFiles(ctx context.Context, arg ListAllFilesParams) ([]L
 			&i.OwnerID,
 			&i.OwnerEmail,
 			&i.TotalCount,
+			&i.TotalLogicalSize,
+			&i.TotalPhysicalSize,
 		); err != nil {
 			return nil, err
 		}
@@ -475,60 +481,6 @@ func (q *Queries) ListFilesByOwner(ctx context.Context, arg ListFilesByOwnerPara
 			&i.UploadedAt,
 			&i.IsPublic,
 			&i.DownloadCount,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listFilesSharedWithUser = `-- name: ListFilesSharedWithUser :many
-SELECT f.id, f.owner_id, f.blob_id, f.filename, f.declared_mime, f.size, f.uploaded_at, f.is_public, f.public_token, f.download_count, f.folder_id
-FROM files f
-JOIN file_shares fs ON f.id = fs.file_id
-WHERE fs.shared_with = $1
-  AND ($2 = '' OR f.filename ILIKE '%' || $2 || '%')
-ORDER BY f.uploaded_at DESC
-LIMIT $3 OFFSET $4
-`
-
-type ListFilesSharedWithUserParams struct {
-	SharedWith int64       `json:"shared_with"`
-	Column2    interface{} `json:"column_2"`
-	Limit      int32       `json:"limit"`
-	Offset     int32       `json:"offset"`
-}
-
-func (q *Queries) ListFilesSharedWithUser(ctx context.Context, arg ListFilesSharedWithUserParams) ([]File, error) {
-	rows, err := q.db.Query(ctx, listFilesSharedWithUser,
-		arg.SharedWith,
-		arg.Column2,
-		arg.Limit,
-		arg.Offset,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []File{}
-	for rows.Next() {
-		var i File
-		if err := rows.Scan(
-			&i.ID,
-			&i.OwnerID,
-			&i.BlobID,
-			&i.Filename,
-			&i.DeclaredMime,
-			&i.Size,
-			&i.UploadedAt,
-			&i.IsPublic,
-			&i.PublicToken,
-			&i.DownloadCount,
-			&i.FolderID,
 		); err != nil {
 			return nil, err
 		}
