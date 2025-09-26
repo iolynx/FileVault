@@ -1,4 +1,4 @@
-# BalkanID Full Stack Engineering Intern — Capstone Hiring Task
+# File Vault
 
 Secure, deduplicated file storage platform (Go backend + React frontend).
 
